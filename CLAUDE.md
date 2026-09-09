@@ -10,7 +10,7 @@ it is used; in short:
 | File | What it's for | When to touch it |
 |------|---------------|------------------|
 | `docs/CURRENT_WORK.md` | The agreed now/next work, as work sets with staged checklists. Read first each session | Tick stages as you go. When a work set is implemented, tested, and signed off: summarize it in `COMPLETED_WORK.md`, then delete the work set. Empty file = pick the next idea |
-| `docs/COMPLETED_WORK.md` | High-level dated record of finished work sets, newest first | Add an entry when a work set is signed off and removed from `CURRENT_WORK.md` |
+| `docs/COMPLETED_WORK.md` | High-level record of finished work sets, newest first | Add an entry when a work set is signed off and removed from `CURRENT_WORK.md`; head it with sign-off **date and time** (`## YYYY-MM-DD HH:MM — name`, 24h local) |
 | `docs/IDEAS.md` | Quick one-line ideas, `Pending` / `Completed` sections (`[future]`, `[implemented]`, `[rejected]` prefixes) | Add ideas freely; move to Completed when a work set resolves them |
 | `docs/REQUIREMENTS.md` | Spec of intended editor behavior — the reference for "correct" | Update in the same work set that changes behavior |
 | `docs/OVERVIEW.md` | High-level "what and why" for a human reader | Rarely — only on a real shift in purpose or approach |
