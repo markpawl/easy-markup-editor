@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Patch</title>
+<style>
+  :root{
+    --paper:#EEF0EE;
+    --card:#F8F9F7;
+    --ink:#20241F;
+    --ink-soft:#5B6158;
+    --hairline:#CDD2CB;
+    --edit:#1F7A64;
+    --edit-bg:#CBEBDF;
+    --insert:#B0631A;
+    --insert-bg:#F6E3C8;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--mono);
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+    -webkit-user-select:text;
+    user-select:text;
+  }
+  header{
+    padding:12px 20px;
+    border-bottom:1px solid var(--hairline);
+    display:flex;
+    align-items:center;
+    gap:16px;
+    flex-shrink:0;
+    -webkit-app-region: drag;
+  }
+  header .title{flex:1; min-width:0;}
+  header h1{
+    font-family:var(--serif);
+    font-size:15px;
+    font-weight:normal;
+    margin:0;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .dirty-dot{
+    width:6px; height:6px; border-radius:50%;
+    background:var(--insert);
+    display:none;
+    flex-shrink:0;
+  }
+  h1.dirty .dirty-dot{display:inline-block;}
+  header p{
+    margin:2px 0 0;
+    font-size:11.5px;
+    color:var(--ink-soft);
+  }
+  .file-actions{
+    display:flex;
+    gap:8px;
+    -webkit-app-region: no-drag;
+  }
+  .file-actions button{
+    font-family:var(--mono);
+    font-size:12px;
+    border:1px solid var(--hairline);
+    background:#fff;
+    color:var(--ink);
+    padding:7px 13px;
+    border-radius:4px;
+    cursor:pointer;
+  }
+  .file-actions button:hover{border-color:var(--ink-soft);}
+  main{
+    flex:1;
+    display:flex;
+    min-height:0;
+  }
+  .preview-pane{
+    flex:1 1 58%;
+    overflow-y:auto;
+    padding:36px 44px;
+    background:var(--paper);
+  }
+  .preview-pane .doc{
+    max-width:640px;
+    font-family:var(--serif);
+    font-size:16px;
+    line-height:1.7;
+    color:var(--ink);
+  }
+  .block{margin:0 0 20px;}
+  .block h1,.block h2,.block h3{font-family:var(--serif); margin:0 0 4px; font-weight:normal;}
+  .block h1{font-size:26px;}
+  .block h2{font-size:21px;}
+  .block h3{font-size:18px;}
+  .block p{margin:0;}
+  .block ul,.block ol{margin:0; padding-left:22px;}
+  .block li{margin:2px 0;}
+  .block blockquote{margin:0; padding-left:14px; border-left:2px solid var(--hairline); color:var(--ink-soft); font-style:italic;}
+  .block pre{margin:0; background:#fff; border:1px solid var(--hairline); border-radius:4px; padding:10px 12px; font-family:var(--mono); font-size:13px; overflow-x:auto;}
+  .block code{font-family:var(--mono); font-size:0.85em; background:rgba(0,0,0,0.05); padding:1px 4px; border-radius:3px;}
+  .block pre code{background:none; padding:0;}
+  .block strong{font-weight:bold;}
+  .block em{font-style:italic;}
+
+  .unit{
+    cursor:text;
+    border-radius:2px;
+    transition:background 80ms ease, box-shadow 80ms ease;
+  }
+  .unit:hover{
+    background:rgba(31,122,100,0.16);
+    box-shadow:inset 0 -2px 0 rgba(31,122,100,0.45);
+  }
+  .unit.active-edit{
+    background:var(--edit-bg);
+    box-shadow:inset 0 -3px 0 var(--edit);
+  }
+  .unit.active-edit:hover{background:var(--edit-bg);}
+  .unit.active-insert{
+    background:var(--insert-bg);
+    box-shadow:inset 0 -3px 0 var(--insert);
+  }
+  .unit.active-insert:hover{background:var(--insert-bg);}
+  .caret-marker{
+    color:var(--insert);
+    font-weight:bold;
+    font-family:var(--mono);
+    padding:0 1px;
+    animation:caretBlink 1s steps(1) infinite;
+  }
+  @keyframes caretBlink{
+    0%, 49%{opacity:1;}
+    50%, 100%{opacity:0.2;}
+  }
+
+  .panel{
+    flex:0 0 42%;
+    max-width:440px;
+    border-left:1px solid var(--hairline);
+    background:var(--card);
+    display:flex;
+    flex-direction:column;
+    padding:18px 20px;
+    min-height:0;
+  }
+  .mode-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:12px;
+    min-height:20px;
+  }
+  .mode-dot{width:7px; height:7px; border-radius:50%; background:var(--ink-soft); flex-shrink:0;}
+  .mode-row.edit .mode-dot{background:var(--edit);}
+  .mode-row.insert .mode-dot{background:var(--insert);}
+  .mode-label{font-size:12px; color:var(--ink-soft);}
+  .mode-row.edit .mode-label{color:var(--edit);}
+  .mode-row.insert .mode-label{color:var(--insert);}
+
+  textarea{
+    flex:1;
+    width:100%;
+    resize:none;
+    border:1px solid var(--hairline);
+    border-radius:4px;
+    padding:12px 14px;
+    font-family:var(--mono);
+    font-size:13px;
+    line-height:1.6;
+    background:#fff;
+    color:var(--ink);
+    outline:none;
+  }
+  textarea:focus{border-color:var(--ink-soft);}
+  textarea::placeholder{color:#A7ACA3;}
+  textarea:disabled{background:#F1F2EF; color:#A7ACA3;}
+
+  .actions{display:flex; gap:8px; margin-top:12px;}
+  .actions button{
+    font-family:var(--mono);
+    font-size:12px;
+    border:1px solid var(--hairline);
+    background:#fff;
+    color:var(--ink);
+    padding:8px 14px;
+    border-radius:4px;
+    cursor:pointer;
+  }
+  .actions button:hover:not(:disabled){border-color:var(--ink-soft);}
+  .actions button:disabled{opacity:0.4; cursor:default;}
+  .actions button.primary{color:#fff; border-color:transparent; background:var(--ink-soft);}
+  .panel.mode-edit .actions button.primary{background:var(--edit);}
+  .panel.mode-insert .actions button.primary{background:var(--insert);}
+
+  .hint{font-size:11.5px; color:var(--ink-soft); line-height:1.6; margin:0 0 14px;}
+  #fileInput{display:none;}
+
+  .modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(20,22,19,0.35);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:50;
+  }
+  .modal-overlay[hidden]{display:none;}
+  .modal-box{
+    background:#fff;
+    border:1px solid var(--hairline);
+    border-radius:8px;
+    padding:20px 22px;
+    width:300px;
+    box-shadow:0 12px 32px rgba(0,0,0,0.2);
+  }
+  .modal-title{font-family:var(--serif); font-size:15px; margin:0 0 6px;}
+  .modal-body{font-size:12.5px; color:var(--ink-soft); line-height:1.5; margin:0 0 18px;}
+  .modal-actions{display:flex; flex-direction:column; gap:8px;}
+  .modal-actions button{
+    font-family:var(--mono);
+    font-size:12px;
+    border:1px solid var(--hairline);
+    background:#fff;
+    color:var(--ink);
+    padding:9px 12px;
+    border-radius:4px;
+    cursor:pointer;
+    text-align:left;
+  }
+  .modal-actions button:hover{border-color:var(--ink-soft);}
+  .modal-actions button.primary{color:#fff; border-color:transparent;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">
+    <h1 id="titleText"><span id="fileName">example.md</span><span class="dirty-dot"></span></h1>
+    <p>Select text to edit it. Click to place a cursor and insert new text.</p>
+  </div>
+  <div class="file-actions">
+    <input type="file" id="fileInput" accept=".md,.markdown,.txt">
+    <button id="openBtn">Open</button>
+    <button id="saveBtn">Save</button>
+  </div>
+</header>
+
+<main>
+  <div class="preview-pane"><div class="doc" id="doc"></div></div>
+  <div class="panel" id="panel">
+    <div class="mode-row" id="modeRow">
+      <span class="mode-dot"></span>
+      <span class="mode-label" id="modeLabel">Nothing selected</span>
+    </div>
+    <p class="hint" id="hint">Select a sentence, list item, or heading in the preview. It loads here on its own — edit it and submit to write it back into the file.</p>
+    <textarea id="editor" placeholder="Select or click in the preview first…" disabled></textarea>
+    <div class="actions">
+      <button id="cancelBtn">Cancel</button>
+      <button id="submitBtn" class="primary" disabled>Submit</button>
+    </div>
+  </div>
+</main>
+
+<div class="modal-overlay" id="modalOverlay" hidden>
+  <div class="modal-box">
+    <p class="modal-title" id="modalTitle">You have unsaved text.</p>
+    <p class="modal-body" id="modalBody">Moving to a new selection will lose it unless you keep it first.</p>
+    <div class="modal-actions">
+      <button id="modalCommit" class="primary">Update</button>
+      <button id="modalDiscard">Discard it</button>
+      <button id="modalCancel">Cancel — stay here</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SAMPLE = "# Trail notes\n\nWe started at the lower ridge trailhead around 7am, before the heat set in. The first mile climbs steadily through pine, then flattens out along a shoulder with views back toward the valley.\n\n## Gear\n\n- Two liters of water minimum. A third if it's forecast over 85.\n- Trekking poles for the descent\n- A light jacket for the summit wind\n\nAt the saddle the trail splits. The left fork is shorter but exposed the whole way. The right fork adds forty minutes but stays in tree cover until the final scramble.\n\n> Take the right fork if it's already past 9am. The exposed section gets brutal in direct sun.\n\n## Summit\n\nThe last quarter mile is a hands-on-rock scramble, not technical but slow going. Worth it for the ridge line view in both directions. Plan on six hours round trip for a relaxed pace.";
+
+let raw = SAMPLE;
+let blocks = [];
+let flatUnits = [];
+let mode = 'idle';
+let range = null;
+let loadedEditText = '';
+let currentFileName = 'Untitled.md';
+let dirty = false;
+let pendingTarget = null;
+
+const hasElectron = !!window.electronAPI;
+
+const docEl = document.getElementById('doc');
+const panelEl = document.getElementById('panel');
+const modeRowEl = document.getElementById('modeRow');
+const modeLabelEl = document.getElementById('modeLabel');
+const hintEl = document.getElementById('hint');
+const editorEl = document.getElementById('editor');
+const submitBtn = document.getElementById('submitBtn');
+const cancelBtn = document.getElementById('cancelBtn');
+const openBtn = document.getElementById('openBtn');
+const saveBtn = document.getElementById('saveBtn');
+const fileInput = document.getElementById('fileInput');
+const titleText = document.getElementById('titleText');
+const fileNameEl = document.getElementById('fileName');
+const modalOverlay = document.getElementById('modalOverlay');
+const modalTitle = document.getElementById('modalTitle');
+const modalBody = document.getElementById('modalBody');
+const modalCommit = document.getElementById('modalCommit');
+const modalDiscard = document.getElementById('modalDiscard');
+const modalCancel = document.getElementById('modalCancel');
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function inline(s){
+  s = s.replace(/\n/g, ' ');
+  s = escapeHtml(s);
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  return s;
+}
+
+function splitSentences(text){
+  const result = [];
+  const re = /[^.!?]*[.!?]+(?:\s+|$)|[^.!?]+$/g;
+  let m;
+  while((m = re.exec(text)) !== null){
+    if(m[0].length === 0){ re.lastIndex++; continue; }
+    const start = m.index;
+    const trimmedEnd = start + m[0].replace(/\s+$/, '').length;
+    if(trimmedEnd > start) result.push({ start, end: trimmedEnd, text: text.slice(start, trimmedEnd) });
+  }
+  return result;
+}
+
+function parseBlocks(text){
+  const lines = text.split('\n');
+  const result = [];
+  let offset = 0;
+  let cur = null;
+  for(let i=0;i<lines.length;i++){
+    const line = lines[i];
+    const lineStart = offset;
+    const lineEnd = offset + line.length;
+    if(line.trim() === ''){
+      if(cur){ result.push(cur); cur = null; }
+    } else {
+      if(!cur) cur = { start: lineStart, end: lineEnd };
+      else cur.end = lineEnd;
+    }
+    offset = lineEnd + 1;
+  }
+  if(cur) result.push(cur);
+  result.forEach(b => { b.raw = text.slice(b.start, b.end); });
+  return result;
+}
+
+function blockType(rawBlock){
+  const lines = rawBlock.split('\n');
+  const first = lines[0];
+  if(/^#{1,6}\s/.test(first)) return 'heading';
+  if(/^```/.test(first)) return 'code';
+  if(/^>\s?/.test(first)) return 'quote';
+  if(lines.every(l => /^\s*[-*]\s/.test(l))) return 'ul';
+  if(lines.every(l => /^\s*\d+\.\s/.test(l))) return 'ol';
+  return 'p';
+}
+
+function computeUnitsForBlock(block){
+  const type = blockType(block.raw);
+  const units = [];
+  if(type === 'heading' || type === 'code' || type === 'quote'){
+    units.push({ start: block.start, end: block.end });
+    return units;
+  }
+  if(type === 'ul' || type === 'ol'){
+    const lines = block.raw.split('\n');
+    const markerRe = type === 'ul' ? /^(\s*[-*]\s)/ : /^(\s*\d+\.\s)/;
+    let cum = block.start;
+    for(const line of lines){
+      const lineStart = cum;
+      const lineEnd = cum + line.length;
+      const m = line.match(markerRe);
+      const markerLen = m ? m[1].length : 0;
+      const content = line.slice(markerLen);
+      const contentStart = lineStart + markerLen;
+      const sentences = splitSentences(content);
+      if(sentences.length === 0){
+        units.push({ start: lineStart, end: lineEnd });
+      } else {
+        sentences.forEach(s => units.push({ start: contentStart + s.start, end: contentStart + s.end }));
+      }
+      cum = lineEnd + 1;
+    }
+    return units;
+  }
+  const sentences = splitSentences(block.raw);
+  if(sentences.length === 0){
+    units.push({ start: block.start, end: block.end });
+  } else {
+    sentences.forEach(s => units.push({ start: block.start + s.start, end: block.start + s.end }));
+  }
+  return units;
+}
+
+function renderBlockHtml(block, blockIdx){
+  const type = blockType(block.raw);
+  const units = block.units;
+
+  function unitSpan(u, uIdx, innerHtml){
+    const flat = flatUnits.length;
+    flatUnits.push({ blockIdx, u: uIdx, start: u.start, end: u.end });
+    return `<span class="unit" data-idx="${blockIdx}" data-u="${uIdx}" data-flat="${flat}">${innerHtml}</span>`;
+  }
+
+  if(type === 'heading'){
+    const m = block.raw.match(/^(#{1,6})\s([\s\S]*)$/);
+    const level = m[1].length;
+    return `<h${level}>${unitSpan(units[0], 0, inline(m[2]))}</h${level}>`;
+  }
+  if(type === 'code'){
+    const lines = block.raw.split('\n');
+    const last = lines[lines.length - 1].trim() === '```' ? -1 : lines.length;
+    const inner = lines.slice(1, last).join('\n');
+    return `<pre>${unitSpan(units[0], 0, `<code>${escapeHtml(inner)}</code>`)}</pre>`;
+  }
+  if(type === 'quote'){
+    const text = block.raw.split('\n').map(l => l.replace(/^>\s?/, '')).join(' ');
+    return `<blockquote>${unitSpan(units[0], 0, inline(text))}</blockquote>`;
+  }
+  if(type === 'ul' || type === 'ol'){
+    const lines = block.raw.split('\n');
+    const markerRe = type === 'ul' ? /^(\s*[-*]\s)/ : /^(\s*\d+\.\s)/;
+    let uIdx = 0;
+    const items = lines.map(line => {
+      const m = line.match(markerRe);
+      const markerLen = m ? m[1].length : 0;
+      const content = line.slice(markerLen);
+      const sentences = splitSentences(content);
+      let html;
+      if(sentences.length === 0){
+        html = unitSpan(units[uIdx], uIdx, inline(content));
+        uIdx++;
+      } else {
+        html = sentences.map(s => {
+          const span = unitSpan(units[uIdx], uIdx, inline(s.text) + ' ');
+          uIdx++;
+          return span;
+        }).join('');
+      }
+      return `<li>${html}</li>`;
+    }).join('');
+    return `<${type}>${items}</${type}>`;
+  }
+  const sentences = splitSentences(block.raw);
+  if(sentences.length === 0){
+    return `<p>${unitSpan(units[0], 0, inline(block.raw))}</p>`;
+  }
+  const html = sentences.map((s, i) => unitSpan(units[i], i, inline(s.text) + ' ')).join('');
+  return `<p>${html}</p>`;
+}
+
+function render(){
+  blocks = parseBlocks(raw);
+  flatUnits = [];
+  blocks.forEach(b => { b.units = computeUnitsForBlock(b); });
+  docEl.innerHTML = blocks.map((b, i) => `<div class="block" data-idx="${i}">${renderBlockHtml(b, i)}</div>`).join('');
+  clearSelectionState();
+}
+
+function findUnitEl(node){
+  if(!node) return null;
+  const el = node.nodeType === 3 ? node.parentElement : node;
+  return el ? el.closest('.unit') : null;
+}
+
+function clearHighlights(){
+  docEl.querySelectorAll('.unit').forEach(el => el.classList.remove('active-edit', 'active-insert'));
+  docEl.querySelectorAll('.caret-marker').forEach(el => el.remove());
+}
+
+function clearSelectionState(){
+  mode = 'idle';
+  range = null;
+  clearHighlights();
+  panelEl.classList.remove('mode-edit', 'mode-insert');
+  modeRowEl.classList.remove('edit', 'insert');
+  modeLabelEl.textContent = 'Nothing selected';
+  hintEl.style.display = 'block';
+  editorEl.value = '';
+  editorEl.placeholder = 'Select or click in the preview first…';
+  editorEl.disabled = true;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Submit';
+}
+
+function enterEditForRange(minFlat, maxFlat){
+  mode = 'edit';
+  range = { minFlat, maxFlat };
+  clearHighlights();
+  for(let k = minFlat; k <= maxFlat; k++){
+    const el = docEl.querySelector(`.unit[data-flat="${k}"]`);
+    if(el) el.classList.add('active-edit');
+  }
+  panelEl.classList.remove('mode-insert');
+  panelEl.classList.add('mode-edit');
+  modeRowEl.classList.remove('insert');
+  modeRowEl.classList.add('edit');
+  modeLabelEl.textContent = maxFlat > minFlat ? `Editing ${maxFlat - minFlat + 1} sentences` : 'Editing selection';
+  hintEl.style.display = 'none';
+  const start = flatUnits[minFlat].start;
+  const end = flatUnits[maxFlat].end;
+  editorEl.disabled = false;
+  editorEl.value = raw.slice(start, end);
+  loadedEditText = editorEl.value;
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Update';
+}
+
+function enterInsertForUnit(flat){
+  mode = 'insert';
+  range = { flat };
+  clearHighlights();
+  const unitEl = docEl.querySelector(`.unit[data-flat="${flat}"]`);
+  if(unitEl){
+    unitEl.classList.add('active-insert');
+    unitEl.insertAdjacentHTML('afterend', '<span class="caret-marker" aria-hidden="true">&gt;</span>');
+  }
+  panelEl.classList.remove('mode-edit');
+  panelEl.classList.add('mode-insert');
+  modeRowEl.classList.remove('edit');
+  modeRowEl.classList.add('insert');
+  modeLabelEl.textContent = 'Cursor placed — inserting new text';
+  hintEl.style.display = 'none';
+  editorEl.disabled = false;
+  editorEl.value = '';
+  editorEl.placeholder = 'Type new text to insert here…';
+  editorEl.focus();
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Insert';
+}
+
+function isPanelDirty(){
+  if(mode === 'insert') return editorEl.value.trim() !== '';
+  if(mode === 'edit') return editorEl.value !== loadedEditText;
+  return false;
+}
+
+function applyChange(kind, payload){
+  if(kind === 'insert') enterInsertForUnit(payload.flat);
+  else if(kind === 'edit') enterEditForRange(payload.minFlat, payload.maxFlat);
+  else clearSelectionState();
+}
+
+function requestChange(kind, payload){
+  let targetPayload = payload;
+
+  if(kind === 'insert'){
+    const sameAsCurrent = mode === 'insert' && range && range.flat === payload.flat;
+    if(sameAsCurrent){ applyChange('idle', null); return; }
+    targetPayload = { flat: payload.flat, endOffset: flatUnits[payload.flat].end };
+  } else if(kind === 'edit'){
+    const sameAsCurrent = mode === 'edit' && range && range.minFlat === payload.minFlat && range.maxFlat === payload.maxFlat;
+    if(sameAsCurrent){ applyChange('idle', null); return; }
+    targetPayload = {
+      minFlat: payload.minFlat,
+      maxFlat: payload.maxFlat,
+      startOffset: flatUnits[payload.minFlat].start,
+      endOffset: flatUnits[payload.maxFlat].end
+    };
+  }
+
+  if(mode === 'idle' || !isPanelDirty()){
+    applyChange(kind, targetPayload);
+    return;
+  }
+  showConflictModal(kind, targetPayload);
+}
+
+function showConflictModal(kind, payload){
+  pendingTarget = { kind, payload };
+  const verb = mode === 'insert' ? 'Insert' : 'Update';
+  modalTitle.textContent = mode === 'insert' ? "You've typed text to insert." : "You've edited this text.";
+  modalBody.textContent = `Selecting something else will lose it unless you ${verb.toLowerCase()} it first.`;
+  modalCommit.textContent = verb;
+  modalCommit.style.background = mode === 'insert' ? 'var(--insert)' : 'var(--edit)';
+  modalOverlay.hidden = false;
+}
+
+function closeModal(){
+  modalOverlay.hidden = true;
+  pendingTarget = null;
+}
+
+function remapOffset(off, info){
+  if(off <= info.a) return off;
+  if(off >= info.b) return off + (info.insertedLength - (info.b - info.a));
+  return null;
+}
+
+function commitCurrentWithInfo(){
+  if(mode === 'edit' && range){
+    const a = flatUnits[range.minFlat].start;
+    const b = flatUnits[range.maxFlat].end;
+    const newText = editorEl.value;
+    raw = raw.slice(0, a) + newText + raw.slice(b);
+    setDirty(true);
+    render();
+    return { a, b, insertedLength: newText.length };
+  }
+  if(mode === 'insert' && range){
+    const text = editorEl.value.trim();
+    if(!text) return null;
+    const u = flatUnits[range.flat];
+    const isBlockEnd = u.end === blocks[u.blockIdx].end;
+    const insertText = (isBlockEnd ? '\n\n' : ' ') + text;
+    const a = u.end;
+    const b = u.end;
+    raw = raw.slice(0, a) + insertText + raw.slice(b);
+    setDirty(true);
+    render();
+    return { a, b, insertedLength: insertText.length };
+  }
+  return null;
+}
+
+modalDiscard.addEventListener('click', () => {
+  const t = pendingTarget;
+  closeModal();
+  if(t) applyChange(t.kind, t.payload);
+});
+
+modalCommit.addEventListener('click', () => {
+  const t = pendingTarget;
+  const info = commitCurrentWithInfo();
+  closeModal();
+  if(!t || !info) return;
+  if(t.kind === 'insert'){
+    const remappedEnd = remapOffset(t.payload.endOffset, info);
+    if(remappedEnd === null) return;
+    const idx = flatUnits.findIndex(u => u.end === remappedEnd);
+    if(idx !== -1) enterInsertForUnit(idx);
+  } else if(t.kind === 'edit'){
+    const remappedStart = remapOffset(t.payload.startOffset, info);
+    const remappedEnd = remapOffset(t.payload.endOffset, info);
+    if(remappedStart === null || remappedEnd === null) return;
+    const minIdx = flatUnits.findIndex(u => u.start === remappedStart);
+    const maxIdx = flatUnits.findIndex(u => u.end === remappedEnd);
+    if(minIdx !== -1 && maxIdx !== -1) enterEditForRange(minIdx, maxIdx);
+  }
+});
+
+modalCancel.addEventListener('click', () => {
+  closeModal();
+  window.getSelection().removeAllRanges();
+});
+
+let clickDebounce = null;
+
+function processSelectionNow(){
+  const sel = window.getSelection();
+  if(!sel || sel.rangeCount === 0) return;
+  if(!docEl.contains(sel.anchorNode)) return;
+  if(!modalOverlay.hidden) return;
+
+  if(sel.isCollapsed){
+    const unitEl = findUnitEl(sel.anchorNode);
+    if(!unitEl) return;
+    requestChange('insert', { flat: parseInt(unitEl.dataset.flat, 10) });
+  } else {
+    const elA = findUnitEl(sel.anchorNode);
+    const elF = findUnitEl(sel.focusNode);
+    if(!elA || !elF) return;
+    const flatA = parseInt(elA.dataset.flat, 10);
+    const flatF = parseInt(elF.dataset.flat, 10);
+    requestChange('edit', { minFlat: Math.min(flatA, flatF), maxFlat: Math.max(flatA, flatF) });
+  }
+}
+
+docEl.addEventListener('click', (e) => {
+  if(e.ctrlKey || e.metaKey) return;
+  if(clickDebounce) clearTimeout(clickDebounce);
+  clickDebounce = setTimeout(() => {
+    clickDebounce = null;
+    processSelectionNow();
+  }, 400);
+});
+
+docEl.addEventListener('dblclick', (e) => {
+  if(e.ctrlKey || e.metaKey) return;
+  if(clickDebounce){ clearTimeout(clickDebounce); clickDebounce = null; }
+  processSelectionNow();
+});
+
+docEl.addEventListener('mousedown', (e) => {
+  if(!(e.ctrlKey || e.metaKey)) return;
+  if(!modalOverlay.hidden) return;
+  const unitEl = findUnitEl(e.target);
+  if(!unitEl) return;
+  e.preventDefault();
+  window.getSelection().removeAllRanges();
+  const flat = parseInt(unitEl.dataset.flat, 10);
+  requestChange('edit', { minFlat: flat, maxFlat: flat });
+});
+
+editorEl.addEventListener('input', () => {
+  if(mode === 'insert') submitBtn.disabled = editorEl.value.trim() === '';
+  if(mode === 'edit') submitBtn.disabled = false;
+});
+
+submitBtn.addEventListener('click', () => {
+  commitCurrentWithInfo();
+});
+
+cancelBtn.addEventListener('click', () => {
+  clearSelectionState();
+  window.getSelection().removeAllRanges();
+});
+
+function setDirty(v){
+  dirty = v;
+  titleText.classList.toggle('dirty', v);
+}
+
+function setFileName(name){
+  currentFileName = name;
+  fileNameEl.textContent = name;
+}
+
+async function doSave(saveAs){
+  if(hasElectron){
+    const result = await window.electronAPI.saveFile(raw, saveAs);
+    if(!result.canceled){
+      setFileName(result.filePath.split(/[\\/]/).pop());
+      setDirty(false);
+    }
+  } else {
+    const blob = new Blob([raw], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = currentFileName || 'untitled.md';
+    a.click();
+    URL.revokeObjectURL(url);
+    setDirty(false);
+  }
+}
+
+openBtn.addEventListener('click', async () => {
+  if(hasElectron) await window.electronAPI.openFile();
+  else fileInput.click();
+});
+
+saveBtn.addEventListener('click', () => doSave(false));
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    raw = reader.result;
+    setFileName(file.name);
+    setDirty(false);
+    render();
+  };
+  reader.readAsText(file);
+  fileInput.value = '';
+});
+
+if(hasElectron){
+  window.electronAPI.onFileOpened(({ filePath, content }) => {
+    raw = content;
+    setFileName(filePath.split(/[\\/]/).pop());
+    setDirty(false);
+    render();
+  });
+  window.electronAPI.onRequestSave(() => doSave(false));
+  window.electronAPI.onRequestSaveAs(() => doSave(true));
+}
+
+window.addEventListener('beforeunload', (e) => {
+  if(dirty){
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+setFileName(currentFileName);
+render();
+</script>
+</body>
+</html>
