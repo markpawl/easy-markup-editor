@@ -6,15 +6,24 @@ const { existsSync } = require('fs');
 let mainWindow;
 let currentFilePath = null;
 
-// --- Recent files ------------------------------------------------------------
-// Minimal main-process store: an array of absolute paths, most-recent first,
-// persisted as JSON under userData. Work set #2 (session restore) will fold
-// this into a shared store.
+// --- Persistent store ------------------------------------------------------
+// One JSON file under userData holds everything that outlives the renderer:
+// the recent-files list and the last session. Recent-files changes are
+// written immediately; session writes are additionally debounced (see the
+// Session section).
 
 const RECENT_MAX = 5;
-let recentPaths = [];
 
-function recentStorePath() {
+let store = {
+  recentFiles: [], // absolute paths, most-recent first, max RECENT_MAX
+  session: null    // { filePath, fileName, content, dirty } | null
+};
+
+function storePath() {
+  return path.join(app.getPath('userData'), 'state.json');
+}
+
+function legacyRecentPath() {
   return path.join(app.getPath('userData'), 'recent.json');
 }
 
@@ -24,51 +33,73 @@ function sameFile(a, b) {
     : a === b;
 }
 
-async function loadRecent() {
+function sanitizeStore(raw) {
+  const out = { recentFiles: [], session: null };
+  if (raw && typeof raw === 'object') {
+    if (Array.isArray(raw.recentFiles)) {
+      out.recentFiles = raw.recentFiles.filter(p => typeof p === 'string').slice(0, RECENT_MAX);
+    }
+    if (raw.session && typeof raw.session === 'object') {
+      out.session = raw.session;
+    }
+  }
+  return out;
+}
+
+async function loadStore() {
   try {
-    const parsed = JSON.parse(await fs.readFile(recentStorePath(), 'utf-8'));
-    if (Array.isArray(parsed)) {
-      recentPaths = parsed.filter(p => typeof p === 'string');
+    store = sanitizeStore(JSON.parse(await fs.readFile(storePath(), 'utf-8')));
+    return;
+  } catch {
+    // no readable state.json — try a one-time import of the legacy recent.json
+  }
+  try {
+    const legacy = JSON.parse(await fs.readFile(legacyRecentPath(), 'utf-8'));
+    if (Array.isArray(legacy)) {
+      store = sanitizeStore({ recentFiles: legacy });
+      await writeStore();
     }
   } catch {
-    recentPaths = [];
+    store = sanitizeStore(null);
   }
 }
 
-async function saveRecent() {
+async function writeStore() {
   try {
-    await fs.writeFile(recentStorePath(), JSON.stringify(recentPaths, null, 2), 'utf-8');
+    await fs.writeFile(storePath(), JSON.stringify(store, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Could not write recent.json:', err);
+    console.error('Could not write state.json:', err);
   }
 }
+
+// --- Recent files --------------------------------------------------------
 
 async function addRecent(filePath) {
   const resolved = path.resolve(filePath);
-  recentPaths = [resolved, ...recentPaths.filter(p => !sameFile(p, resolved))].slice(0, RECENT_MAX);
-  await saveRecent();
+  store.recentFiles = [resolved, ...store.recentFiles.filter(p => !sameFile(p, resolved))].slice(0, RECENT_MAX);
+  await writeStore();
   buildMenu();
 }
 
 async function pruneRecent(filePath) {
   const resolved = path.resolve(filePath);
-  const kept = recentPaths.filter(p => !sameFile(p, resolved));
-  if (kept.length !== recentPaths.length) {
-    recentPaths = kept;
-    await saveRecent();
+  const kept = store.recentFiles.filter(p => !sameFile(p, resolved));
+  if (kept.length !== store.recentFiles.length) {
+    store.recentFiles = kept;
+    await writeStore();
     buildMenu();
   }
 }
 
 async function clearRecent() {
-  recentPaths = [];
-  await saveRecent();
+  store.recentFiles = [];
+  await writeStore();
   buildMenu();
 }
 
 // Paths that still exist on disk, in stored order.
 function existingRecent() {
-  return recentPaths.filter(p => existsSync(p));
+  return store.recentFiles.filter(p => existsSync(p));
 }
 
 // --- Window & menu ---------------------------------------------------------
@@ -176,7 +207,7 @@ ipcMain.handle('save-file', async (event, { content, saveAs }) => {
 });
 
 app.whenReady().then(async () => {
-  await loadRecent();
+  await loadStore();
   createWindow();
 });
 

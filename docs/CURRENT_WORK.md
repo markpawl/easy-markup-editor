@@ -44,9 +44,13 @@ Design notes:
 
 Stages:
 
-1. [ ] `main.js` — `state.json` shared store (`readState`/`writeState` over
-       `{ recentFiles, session }`); move recent-files onto it; one-time import
-       of legacy `recent.json`. Recent-files behavior unchanged.
+1. [x] `main.js` — `state.json` shared store: `store = { recentFiles, session }`
+       in memory, `loadStore` / `writeStore` / `sanitizeStore`; recent-files
+       functions now mutate `store.recentFiles`; `loadStore` does a one-time
+       import of legacy `recent.json` when `state.json` is absent. Verified:
+       legacy import populates `state.json` on first launch; second launch
+       loads from `state.json` without re-importing; `session` round-trips;
+       fresh userData launches clean.
 2. [ ] `main.js` — session state in memory; `ipcMain.on('session-state')`
        merges renderer payload with `currentFilePath`; persist on a short
        debounce and on `before-quit`.
