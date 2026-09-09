@@ -214,12 +214,15 @@ function buildMenu() {
     {
       label: 'File',
       submenu: [
+        { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => mainWindow.webContents.send('request-new-tab') },
         { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => openFile() },
         { label: 'Open Recent', submenu: recentSubmenu() },
+        { type: 'separator' },
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow.webContents.send('request-save') },
         { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: () => mainWindow.webContents.send('request-save-as') },
         { type: 'separator' },
-        isMac ? { role: 'close' } : { role: 'quit' }
+        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => mainWindow.webContents.send('request-close-tab') },
+        isMac ? { role: 'close', accelerator: 'CmdOrCtrl+Shift+W' } : { role: 'quit' }
       ]
     },
     { role: 'editMenu' },

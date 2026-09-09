@@ -1054,6 +1054,8 @@ if(hasElectron){
   });
   window.electronAPI.onRequestSave(() => doSave(false));
   window.electronAPI.onRequestSaveAs(() => doSave(true));
+  window.electronAPI.onRequestNewTab(() => newTab());
+  window.electronAPI.onRequestCloseTab(() => closeTab());
 }
 
 window.addEventListener('beforeunload', (e) => {

@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onFileOpened: (callback) => ipcRenderer.on('file-opened', (_event, data) => callback(data)),
   onRequestSave: (callback) => ipcRenderer.on('request-save', () => callback()),
   onRequestSaveAs: (callback) => ipcRenderer.on('request-save-as', () => callback()),
+  onRequestNewTab: (callback) => ipcRenderer.on('request-new-tab', () => callback()),
+  onRequestCloseTab: (callback) => ipcRenderer.on('request-close-tab', () => callback()),
   reportState: (state) => ipcRenderer.send('session-state', state),
   onSessionRestore: (callback) => ipcRenderer.on('session-restore', (_event, data) => callback(data))
 });

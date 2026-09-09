@@ -78,9 +78,13 @@ Stages:
        `state.json` session gets the path from the renderer. Dialog paths (Save
        with no path, Save As) not headless-testable — same write + addRecent
        code as before.
-5. [ ] `main.js` — File menu gains **New** (`CmdOrCtrl+N`) and **Close Tab**
-       (`CmdOrCtrl+W`), sent to the renderer as `request-new-tab` /
-       `request-close-tab` (mirrors `request-save`).
+5. [x] File menu: **New** (`CmdOrCtrl+N`) and **Close Tab** (`CmdOrCtrl+W`)
+       send `request-new-tab` / `request-close-tab`; `preload.js` exposes
+       `onRequestNewTab` / `onRequestCloseTab`; renderer wires them to
+       `newTab()` / `closeTab()`. Menu reordered (New, Open, Recent, ─, Save,
+       Save As, ─, Close Tab, Quit); on macOS `role:'close'` moved to
+       `Cmd+Shift+W` to free `Cmd+W` for Close Tab. Driven test: two
+       `request-new-tab` → 3 tabs; `request-close-tab` → 2.
 6. [ ] Session for the set — `store.session` becomes `{ tabs, activeIndex }`
        (back-compat: an old single-doc `session` loads as one tab). Renderer
        `reportState` sends the tab array + `activeIndex`; `sendSessionRestore`
