@@ -51,9 +51,16 @@ Stages:
        into `tabs[activeIndex].content` / `.dirty` and the strip's dirty dot;
        no page errors. `loadActiveIntoGlobals()` deferred to stage 2 (needed
        only when switching).
-2. [ ] Renderer — `newTab()`, `switchTab(i)` (click), `closeTab(i)` with the
-       dirty-close confirm; never fewer than one tab; panel resets to idle on
-       switch. A `+` button drives `newTab` for now.
+2. [x] Renderer — `loadActiveIntoGlobals()`, `newTab()` (blank doc,
+       `nextUntitledName()`), `switchTab(i)`, `closeTab(i)` with a dedicated
+       `#closeOverlay` Save / Don't save / Cancel modal (`confirmClose()`);
+       `removeTabAt()` keeps ≥1 tab (last close → fresh `Untitled`). One
+       delegated click listener on the strip handles tab / `×` / `+`. `render()`
+       inside `loadActiveIntoGlobals` resets the panel to idle. `doSave` now
+       returns saved/canceled; `beforeunload` guards if **any** tab is dirty.
+       Driven test: new → 2 tabs; per-tab content/dirty preserved across
+       switches; clean close; dirty close raises the modal; Don't-save on the
+       last tab leaves a fresh `Untitled`.
 3. [ ] Renderer — Open (the `file-opened` handler and the browser file input)
        targets a tab: focus an existing tab with the same path, else reuse a
        pristine `Untitled`, else new tab.

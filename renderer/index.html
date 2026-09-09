@@ -344,6 +344,18 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="closeOverlay" hidden>
+  <div class="modal-box">
+    <p class="modal-title">Unsaved changes</p>
+    <p class="modal-body" id="closeBody">This tab has unsaved changes.</p>
+    <div class="modal-actions">
+      <button id="closeSave" class="primary">Save</button>
+      <button id="closeDiscard">Don't save</button>
+      <button id="closeCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SAMPLE = "# Trail notes\n\nWe started at the lower ridge trailhead around 7am, before the heat set in. The first mile climbs steadily through pine, then flattens out along a shoulder with views back toward the valley.\n\n## Gear\n\n- Two liters of water minimum. A third if it's forecast over 85.\n- Trekking poles for the descent\n- A light jacket for the summit wind\n\nAt the saddle the trail splits. The left fork is shorter but exposed the whole way. The right fork adds forty minutes but stays in tree cover until the final scramble.\n\n> Take the right fork if it's already past 9am. The exposed section gets brutal in direct sun.\n\n## Summit\n\nThe last quarter mile is a hands-on-rock scramble, not technical but slow going. Worth it for the ridge line view in both directions. Plan on six hours round trip for a relaxed pace.";
 
@@ -409,6 +421,11 @@ const modalBody = document.getElementById('modalBody');
 const modalCommit = document.getElementById('modalCommit');
 const modalDiscard = document.getElementById('modalDiscard');
 const modalCancel = document.getElementById('modalCancel');
+const closeOverlay = document.getElementById('closeOverlay');
+const closeBody = document.getElementById('closeBody');
+const closeSaveBtn = document.getElementById('closeSave');
+const closeDiscardBtn = document.getElementById('closeDiscard');
+const closeCancelBtn = document.getElementById('closeCancel');
 
 function escapeHtml(s){
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -582,6 +599,99 @@ function renderTabs(){
   ).join('');
   tabStripEl.innerHTML = tabsHtml + `<button class="tab-new" id="tabNew" title="New tab" tabindex="-1">+</button>`;
 }
+
+function nextUntitledName(){
+  const used = new Set(tabs.map(t => t.fileName));
+  if(!used.has('Untitled.md')) return 'Untitled.md';
+  let n = 2;
+  while(used.has(`Untitled-${n}.md`)) n++;
+  return `Untitled-${n}.md`;
+}
+
+// Pull tabs[activeIndex] into the working globals and re-render everything.
+// render() calls clearSelectionState(), so the panel returns to idle.
+function loadActiveIntoGlobals(){
+  const t = tabs[activeIndex];
+  raw = t.content;
+  currentFileName = t.fileName;
+  dirty = t.dirty;
+  fileNameEl.textContent = currentFileName;
+  titleText.classList.toggle('dirty', dirty);
+  render();
+  renderTabs();
+  pushSession();
+}
+
+function newTab(){
+  if(!modalOverlay.hidden) return;
+  touchActiveTab();
+  tabs.push({ filePath: null, fileName: nextUntitledName(), content: '', dirty: false });
+  activeIndex = tabs.length - 1;
+  loadActiveIntoGlobals();
+}
+
+function switchTab(i){
+  if(!modalOverlay.hidden) return;
+  if(i === activeIndex || i < 0 || i >= tabs.length) return;
+  touchActiveTab();
+  activeIndex = i;
+  loadActiveIntoGlobals();
+}
+
+function removeTabAt(i){
+  tabs.splice(i, 1);
+  if(tabs.length === 0){
+    tabs.push({ filePath: null, fileName: 'Untitled.md', content: '', dirty: false });
+  }
+  activeIndex = Math.min(i, tabs.length - 1);
+  loadActiveIntoGlobals();
+}
+
+async function closeTab(i){
+  if(!modalOverlay.hidden) return;
+  if(i == null) i = activeIndex;
+  if(i < 0 || i >= tabs.length) return;
+  if(i !== activeIndex) switchTab(i);
+  i = activeIndex;
+  touchActiveTab();
+  if(tabs[i].dirty){
+    const choice = await confirmClose(tabs[i].fileName);
+    if(choice === 'cancel') return;
+    if(choice === 'save'){
+      const saved = await doSave(false);
+      if(!saved) return;
+    }
+  }
+  removeTabAt(i);
+}
+
+function confirmClose(name){
+  closeBody.textContent = `“${name}” has unsaved changes.`;
+  closeOverlay.hidden = false;
+  return new Promise(resolve => {
+    const done = (choice) => {
+      closeOverlay.hidden = true;
+      closeSaveBtn.removeEventListener('click', onSave);
+      closeDiscardBtn.removeEventListener('click', onDiscard);
+      closeCancelBtn.removeEventListener('click', onCancel);
+      resolve(choice);
+    };
+    const onSave = () => done('save');
+    const onDiscard = () => done('discard');
+    const onCancel = () => done('cancel');
+    closeSaveBtn.addEventListener('click', onSave);
+    closeDiscardBtn.addEventListener('click', onDiscard);
+    closeCancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+tabStripEl.addEventListener('click', (e) => {
+  const closeBtn = e.target.closest('.tab-close');
+  if(closeBtn){ e.stopPropagation(); closeTab(Number(closeBtn.dataset.close)); return; }
+  if(e.target.closest('#tabNew')){ newTab(); return; }
+  const tab = e.target.closest('.tab');
+  if(tab){ switchTab(Number(tab.dataset.tab)); }
+});
 
 function findUnitEl(node){
   if(!node) return null;
@@ -851,20 +961,20 @@ function setFileName(name){
 async function doSave(saveAs){
   if(hasElectron){
     const result = await window.electronAPI.saveFile(raw, saveAs);
-    if(!result.canceled){
-      setFileName(result.filePath.split(/[\\/]/).pop());
-      setDirty(false);
-    }
-  } else {
-    const blob = new Blob([raw], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = currentFileName || 'untitled.md';
-    a.click();
-    URL.revokeObjectURL(url);
+    if(result.canceled) return false;
+    setFileName(result.filePath.split(/[\\/]/).pop());
     setDirty(false);
+    return true;
   }
+  const blob = new Blob([raw], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = currentFileName || 'untitled.md';
+  a.click();
+  URL.revokeObjectURL(url);
+  setDirty(false);
+  return true;
 }
 
 openBtn.addEventListener('click', async () => {
@@ -910,7 +1020,8 @@ if(hasElectron){
 }
 
 window.addEventListener('beforeunload', (e) => {
-  if(dirty){
+  touchActiveTab();
+  if(tabs.some(t => t.dirty)){
     e.preventDefault();
     e.returnValue = '';
   }
