@@ -385,6 +385,11 @@ function touchActiveTab(){
   t.dirty = dirty;
 }
 
+const isWin = navigator.platform.toLowerCase().includes('win');
+function sameFilePath(a, b){
+  return isWin ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
 const hasElectron = !!window.electronAPI;
 
 // Session state is pushed to the main process (debounced) so it can be
@@ -627,6 +632,41 @@ function newTab(){
   touchActiveTab();
   tabs.push({ filePath: null, fileName: nextUntitledName(), content: '', dirty: false });
   activeIndex = tabs.length - 1;
+  loadActiveIntoGlobals();
+}
+
+// Open a document into the tab set: focus an already-open tab for the same
+// path, else reuse a pristine Untitled/sample tab, else add a new tab.
+function openIntoTab({ filePath, fileName, content }){
+  if(!modalOverlay.hidden) return;
+  touchActiveTab();
+
+  if(filePath){
+    const existing = tabs.findIndex(t => t.filePath && sameFilePath(t.filePath, filePath));
+    if(existing !== -1){
+      tabs[existing].content = content;
+      tabs[existing].fileName = fileName;
+      tabs[existing].dirty = false;
+      activeIndex = existing;
+      loadActiveIntoGlobals();
+      return;
+    }
+  }
+
+  const a = tabs[activeIndex];
+  const reusable = a && !a.filePath && !a.dirty && (a.content === '' || a.content === SAMPLE);
+  let target;
+  if(reusable){
+    target = a;
+  } else {
+    target = { filePath: null, fileName: '', content: '', dirty: false };
+    tabs.push(target);
+    activeIndex = tabs.length - 1;
+  }
+  target.filePath = filePath || null;
+  target.fileName = fileName;
+  target.content = content;
+  target.dirty = false;
   loadActiveIntoGlobals();
 }
 
@@ -989,10 +1029,7 @@ fileInput.addEventListener('change', (e) => {
   if(!file) return;
   const reader = new FileReader();
   reader.onload = () => {
-    raw = reader.result;
-    setFileName(file.name);
-    setDirty(false);
-    render();
+    openIntoTab({ filePath: null, fileName: file.name, content: reader.result });
   };
   reader.readAsText(file);
   fileInput.value = '';
@@ -1010,10 +1047,7 @@ if(hasElectron){
     pushSession();
   });
   window.electronAPI.onFileOpened(({ filePath, content }) => {
-    raw = content;
-    setFileName(filePath.split(/[\\/]/).pop());
-    setDirty(false);
-    render();
+    openIntoTab({ filePath, fileName: filePath.split(/[\\/]/).pop(), content });
   });
   window.electronAPI.onRequestSave(() => doSave(false));
   window.electronAPI.onRequestSaveAs(() => doSave(true));

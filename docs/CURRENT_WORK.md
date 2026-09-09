@@ -61,9 +61,13 @@ Stages:
        Driven test: new → 2 tabs; per-tab content/dirty preserved across
        switches; clean close; dirty close raises the modal; Don't-save on the
        last tab leaves a fresh `Untitled`.
-3. [ ] Renderer — Open (the `file-opened` handler and the browser file input)
-       targets a tab: focus an existing tab with the same path, else reuse a
-       pristine `Untitled`, else new tab.
+3. [x] Renderer — `openIntoTab({filePath,fileName,content})`: focus an open tab
+       with the same path (`sameFilePath`, case-insensitive on win32), else
+       reuse a pristine tab (no path, clean, content `''` or `SAMPLE`), else add
+       a tab. Both `onFileOpened` and the browser file input route through it.
+       Driven test: sample tab reused on first open; second file → new tab;
+       reopening (lowercased path) focuses the existing tab; opening while the
+       active tab is dirty → new tab; a fresh `newTab()` is reused.
 4. [ ] `main.js` + `preload.js` + renderer — `save-file` IPC takes
        `{ content, filePath, saveAs }`, returns `{ filePath }`; remove
        `currentFilePath` from main; the active tab stores the returned path.
