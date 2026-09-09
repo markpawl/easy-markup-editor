@@ -9,6 +9,19 @@
 
 ---
 
+## 2026-09-09 09:34 — Restructure CLAUDE.md ↔ docs relationship
+
+- Detailed architecture (render pipeline, selection-to-source mapping,
+  dirty-panel conflict flow, parser gotchas) moved out of `CLAUDE.md` into a
+  new `docs/ARCHITECTURE.md`. One home per fact.
+- `CLAUDE.md` is now a session-start guide: a `Session start` protocol with
+  tiered doc reading (always `CURRENT_WORK.md` + `IDEAS.md`; the rest before
+  code/behavior work), a `Keeping docs current` rule (doc edits ride in the
+  same work set, surfaced for review), a condensed `Architecture in brief`
+  blurb, and the docs table (now with an `ARCHITECTURE.md` row).
+- `docs/OVERVIEW.md` "how it's built" condensed; cross-references across
+  `docs/*` repointed to `ARCHITECTURE.md`.
+
 ## 2026-09-09 09:11 — Rename to "Markup View-Edit"
 
 - Display name **Markup View-Edit**; `package.json` `name` `markup-view-edit`

@@ -21,6 +21,7 @@
 
 ## Completed
 
+- [implemented] Restructure CLAUDE.md ↔ docs relationship (detail → `docs/ARCHITECTURE.md`, session-start protocol, doc-upkeep rule)
 - [implemented] Change display name to "Markup View-Edit"
 - [implemented] `CLAUDE.md` in the project root
 - [implemented] `README.md` with the usual sections
