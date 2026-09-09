@@ -21,6 +21,24 @@
   branches every file-I/O path between the Electron API and the browser
   fallback (file-input picker for Open, Blob download for Save).
 
+## Main-process state
+
+`main.js` holds the small amount of state that outlives the renderer:
+
+- `currentFilePath` — the file `Save` writes back to (in memory only).
+- **Recent files** — an array of absolute paths, newest first, capped at 5,
+  persisted as `recent.json` under `app.getPath('userData')`. `openPath()` and
+  a dialog-based Save As call `addRecent()`; `existingRecent()` filters to
+  paths still on disk when the menu is built. Any change (`addRecent`,
+  `pruneRecent`, `clearRecent`) rewrites the file and calls `buildMenu()` so
+  the `File ▸ Open Recent` submenu updates live. `buildMenu()` is therefore
+  called repeatedly, not just at startup. Dedupe is case-insensitive on win32
+  (`sameFile`).
+
+Opening a recent entry is entirely main-side: the menu-item click calls
+`openPath()`, which sends the same `file-opened` IPC the Open dialog uses — no
+`preload.js` surface for it.
+
 ## Core model: `raw` + offset-tracked units
 
 `raw` (a single string in `index.html`) is the whole document and the sole
@@ -69,7 +87,9 @@ applies the pending panel edit first, then **remaps the new target's offsets**
 through `remapOffset(off, {a, b, insertedLength})` so the follow-up selection
 still points at the right span after the string length changed.
 
-## Known limitations (parser gotchas)
+## Known limitations
+
+### Parser gotchas
 
 - **Sentence splitting** is `/[^.!?]*[.!?]+(?:\s+|$)/` — it splits inside
   "e.g.", "Dr.", etc.
@@ -78,3 +98,9 @@ still points at the right span after the string length changed.
 - **Blockquotes** are a single unit, never split per sentence.
 - Inline formatting (`**bold**`, links) that spans two sentences can be torn
   apart when only one sentence is edited.
+
+### Other
+
+- A recent-files entry that stops existing is hidden from the menu but stays in
+  `recent.json` until the 5-entry cap pushes it out — it can occupy a slot, so
+  fewer than 5 files may show.

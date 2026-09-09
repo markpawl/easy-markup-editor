@@ -43,6 +43,11 @@
 ## Files
 
 - **Open** (`Cmd/Ctrl+O`) — choose a `.md` / `.markdown` / `.txt` file.
+- **Open Recent** — submenu of up to 5 most-recently opened files, newest
+  first, persisted across launches. Selecting one opens it (replacing the
+  current document, like Open). A file that no longer exists is not listed. An
+  empty list shows a disabled "(No recent files)". "Clear Recent Files" empties
+  it. Opening a file, and Save As to a new location, add to the list.
 - **Save** (`Cmd/Ctrl+S`) — write back to the open file, or prompt for a
   location if none is open.
 - **Save As** (`Cmd/Ctrl+Shift+S`) — always prompt for a location.
