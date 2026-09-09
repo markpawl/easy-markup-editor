@@ -23,21 +23,41 @@
 
 ## Main-process state
 
-`main.js` holds the small amount of state that outlives the renderer:
+`main.js` holds the state that outlives the renderer. `currentFilePath` (the
+file `Save` writes back to) is in memory only. Everything persisted lives in a
+single `state.json` under `app.getPath('userData')`, loaded into the `store`
+object at startup (`loadStore` / `writeStore` / `sanitizeStore`):
 
-- `currentFilePath` — the file `Save` writes back to (in memory only).
-- **Recent files** — an array of absolute paths, newest first, capped at 5,
-  persisted as `recent.json` under `app.getPath('userData')`. `openPath()` and
-  a dialog-based Save As call `addRecent()`; `existingRecent()` filters to
-  paths still on disk when the menu is built. Any change (`addRecent`,
-  `pruneRecent`, `clearRecent`) rewrites the file and calls `buildMenu()` so
-  the `File ▸ Open Recent` submenu updates live. `buildMenu()` is therefore
-  called repeatedly, not just at startup. Dedupe is case-insensitive on win32
-  (`sameFile`).
+```
+store = { recentFiles: string[], session: {…} | null }
+```
 
-Opening a recent entry is entirely main-side: the menu-item click calls
-`openPath()`, which sends the same `file-opened` IPC the Open dialog uses — no
-`preload.js` surface for it.
+`loadStore` does a one-time import of a legacy `recent.json` when `state.json`
+is absent. `writeStore()` is the immediate async writer; `scheduleStoreWrite()`
+is a 600 ms debounce for the frequent session pushes; `writeStoreSync()` flushes
+on `before-quit`, where async writes may not finish.
+
+**Recent files** (`store.recentFiles`) — absolute paths, newest first, capped
+at 5, dedupe case-insensitive on win32 (`sameFile`). `openPath()` and a
+dialog-based Save As call `addRecent()`; `existingRecent()` filters to paths
+still on disk when the menu is built. `addRecent` / `pruneRecent` /
+`clearRecent` each `writeStore()` and `buildMenu()`, so the `File ▸ Open
+Recent` submenu updates live and `buildMenu()` runs repeatedly, not just at
+startup. Opening a recent entry is entirely main-side — the click calls
+`openPath()`, which sends the same `file-opened` IPC the Open dialog uses (no
+`preload.js` surface).
+
+**Session** (`store.session` = `{ filePath, fileName, content, dirty }`) — the
+renderer pushes `{ content, fileName, dirty }` over the `session-state` channel
+(debounced ~400 ms on its side via `pushSession()`, gated on `sessionReady`);
+`ipcMain.on('session-state')` attaches the main-owned `filePath` and
+`scheduleStoreWrite()`s. On `did-finish-load`, `sendSessionRestore()` applies
+the restore rule — dirty → the stored buffer as-is; clean → re-read `filePath`
+from disk, falling back to the buffer (marked dirty) if that fails; nothing to
+restore → send `null` — and emits `session-restore`. The renderer applies it
+over `SAMPLE` and only then sets `sessionReady = true`, so the initial default
+document can't clobber a stored session. `preload.js` adds `reportState` and
+`onSessionRestore` for this.
 
 ## Core model: `raw` + offset-tracked units
 
@@ -102,5 +122,9 @@ still points at the right span after the string length changed.
 ### Other
 
 - A recent-files entry that stops existing is hidden from the menu but stays in
-  `recent.json` until the 5-entry cap pushes it out — it can occupy a slot, so
-  fewer than 5 files may show.
+  `store.recentFiles` until the 5-entry cap pushes it out — it can occupy a
+  slot, so fewer than 5 files may show.
+- Session pushes are debounced (~400 ms renderer + 600 ms main), so edits made
+  in the last moment before a crash — as opposed to a clean quit, which flushes
+  synchronously — may not be persisted. Text typed into the edit panel but not
+  yet submitted is never part of the session.

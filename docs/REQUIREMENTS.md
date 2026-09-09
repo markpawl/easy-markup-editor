@@ -55,6 +55,23 @@
   changes.
 - Closing with unsaved changes prompts before discarding.
 
+## Session restore
+
+- On quit, the working state is saved: the current file path (if any), the
+  editor buffer, and the unsaved flag.
+- On the next launch that state is restored in place of the default sample
+  document:
+  - Unsaved at quit → the buffer is restored exactly, still marked unsaved.
+  - Saved (clean) at quit with a file → the file is re-read from disk (its
+    on-disk content wins); if it can no longer be read, the saved buffer is
+    restored and marked unsaved.
+  - No file (untouched sample or unsaved scratch) → the buffer is restored.
+- A missing or unreadable session falls back to the sample document silently.
+- This is a safety net, not a replacement for saving — the unsaved-changes
+  prompt on quit still applies. Text typed into the edit panel but not yet
+  submitted is not part of the saved state. Window size and position are not
+  restored.
+
 ## Standalone (non-Electron) mode
 
 - Opening `renderer/index.html` directly in a browser must work.

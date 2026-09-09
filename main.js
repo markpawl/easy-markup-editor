@@ -1,7 +1,7 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
-const { existsSync } = require('fs');
+const { existsSync, writeFileSync } = require('fs');
 
 let mainWindow;
 let currentFilePath = null;
@@ -72,6 +72,81 @@ async function writeStore() {
   }
 }
 
+let storeWriteTimer = null;
+
+// Debounced write, for the frequent session-state pushes from the renderer.
+function scheduleStoreWrite() {
+  if (storeWriteTimer) clearTimeout(storeWriteTimer);
+  storeWriteTimer = setTimeout(() => {
+    storeWriteTimer = null;
+    writeStore();
+  }, 600);
+}
+
+// Synchronous flush for the quit path, where async writes may not finish.
+function writeStoreSync() {
+  if (storeWriteTimer) {
+    clearTimeout(storeWriteTimer);
+    storeWriteTimer = null;
+  }
+  try {
+    writeFileSync(storePath(), JSON.stringify(store, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Could not write state.json on quit:', err);
+  }
+}
+
+// --- Session ------------------------------------------------------------
+// The renderer pushes { content, fileName, dirty } on every change
+// (debounced on its side). Main attaches the current file path — which it
+// owns — and persists it debounced, plus a synchronous flush on quit.
+
+ipcMain.on('session-state', (event, s) => {
+  if (!s || typeof s !== 'object') return;
+  store.session = {
+    filePath: currentFilePath,
+    fileName: typeof s.fileName === 'string' ? s.fileName : null,
+    content: typeof s.content === 'string' ? s.content : '',
+    dirty: !!s.dirty
+  };
+  scheduleStoreWrite();
+});
+
+// Build the restore payload from the persisted session and hand it to the
+// renderer once the page is ready. Rule: a dirty session restores its buffer
+// as-is; a clean one re-reads its file from disk (fresher), falling back to
+// the buffer — marked unsaved — if the file is gone.
+async function sendSessionRestore(win) {
+  const s = store.session;
+  if (!s) {
+    win.webContents.send('session-restore', null);
+    return;
+  }
+
+  const filePath = typeof s.filePath === 'string' ? s.filePath : null;
+  let content = typeof s.content === 'string' ? s.content : '';
+  let dirty = !!s.dirty;
+
+  if (filePath && !dirty) {
+    try {
+      content = await fs.readFile(filePath, 'utf-8');
+    } catch {
+      dirty = true;
+    }
+  }
+
+  if (filePath) currentFilePath = filePath;
+
+  win.webContents.send('session-restore', {
+    filePath,
+    fileName: typeof s.fileName === 'string' && s.fileName
+      ? s.fileName
+      : (filePath ? path.basename(filePath) : null),
+    content,
+    dirty
+  });
+}
+
 // --- Recent files --------------------------------------------------------
 
 async function addRecent(filePath) {
@@ -118,6 +193,7 @@ function createWindow() {
       sandbox: true
     }
   });
+  mainWindow.webContents.once('did-finish-load', () => sendSessionRestore(mainWindow));
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   buildMenu();
 }
@@ -209,6 +285,10 @@ ipcMain.handle('save-file', async (event, { content, saveAs }) => {
 app.whenReady().then(async () => {
   await loadStore();
   createWindow();
+});
+
+app.on('before-quit', () => {
+  writeStoreSync();
 });
 
 app.on('window-all-closed', () => {

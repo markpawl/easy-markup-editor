@@ -51,22 +51,34 @@ Stages:
        legacy import populates `state.json` on first launch; second launch
        loads from `state.json` without re-importing; `session` round-trips;
        fresh userData launches clean.
-2. [ ] `main.js` — session state in memory; `ipcMain.on('session-state')`
-       merges renderer payload with `currentFilePath`; persist on a short
-       debounce and on `before-quit`.
-3. [ ] `main.js` + `preload.js` — build the restore payload on
-       `did-finish-load` per the restore rule; send `session-restore`.
-       `preload.js` exposes `reportState` + `onSessionRestore`.
-4. [ ] `renderer/index.html` — debounced `reportState` wired to edit / save /
-       filename / dirty changes; `onSessionRestore` applies restored state in
-       place of `SAMPLE`.
-5. [ ] Test with `npm start`: scratch edit → quit → relaunch restores buffer +
-       dirty dot; file + edits → quit → relaunch restores edits; clean file,
-       changed on disk externally → relaunch shows fresh disk content; restored
-       file deleted → falls back to `SAMPLE`, no error; recent-files still
-       works and legacy `recent.json` is imported.
-6. [ ] Docs: `REQUIREMENTS.md` new "Session" section; `ARCHITECTURE.md`
-       Main-process state (`state.json` shape, `session-state` /
-       `session-restore` IPC, debounced + `before-quit` writes).
+2. [x] `main.js` — `ipcMain.on('session-state')` merges the renderer's
+       `{ content, fileName, dirty }` with main-owned `currentFilePath` into
+       `store.session`; `scheduleStoreWrite()` (600 ms debounce) for the
+       frequent pushes; `writeStoreSync()` on `before-quit` flushes it.
+       Verified both paths write the session to `state.json` (quit after the
+       debounce fires; quit inside the debounce window → sync flush).
+3. [x] `main.js` + `preload.js` — `sendSessionRestore(win)` runs on
+       `webContents.once('did-finish-load')`, applies the dirty-vs-disk rule,
+       and sends `session-restore` (payload, or `null` when there's nothing to
+       restore so the renderer always gets one signal). `preload.js` exposes
+       `reportState` + `onSessionRestore`.
+4. [x] `renderer/index.html` — `pushSession()` (400 ms debounce, gated on
+       `sessionReady`) wired into `setDirty` / `setFileName`; `onSessionRestore`
+       applies restored state over `SAMPLE`, then flips `sessionReady` so the
+       initial SAMPLE can't overwrite a stored session.
+5. [x] Driven tests (`executeJavaScript` + self-quit hook): fresh launch → no
+       restore, SAMPLE; dirty scratch buffer → restored verbatim with the
+       dirty dot; clean session + file present → re-read from disk (stale
+       buffer ignored); clean session + file missing → buffer restored, marked
+       dirty; debounced write and `before-quit` sync flush both persist;
+       recent-files load from `state.json` and legacy `recent.json` imports
+       once. Not driven (rely on shared primitives + standard Electron): a real
+       menu "Open Recent" click and a real window-close `before-quit`.
+6. [x] Docs: `REQUIREMENTS.md` gained a "Session restore" section (what
+       persists, the dirty-vs-disk rule, the caveats); `ARCHITECTURE.md`
+       Main-process state rewritten around `state.json` / `store` (shape,
+       `loadStore`/`writeStore`/`scheduleStoreWrite`/`writeStoreSync`, the
+       `session-state` / `session-restore` IPC and `sessionReady` gate), plus
+       two "Other" limitation notes.
 7. [ ] Sign off → `COMPLETED_WORK.md` entry (date + time), delete this work
        set, move idea to `IDEAS.md` Completed as `[implemented]`.

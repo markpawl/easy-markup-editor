@@ -299,6 +299,20 @@ let pendingTarget = null;
 
 const hasElectron = !!window.electronAPI;
 
+// Session state is pushed to the main process (debounced) so it can be
+// restored next launch. Held back until the main process has had its chance
+// to restore a previous session, so the initial SAMPLE doesn't overwrite it.
+let sessionReady = false;
+let sessionTimer = null;
+function pushSession(){
+  if(!hasElectron || !sessionReady) return;
+  if(sessionTimer) clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(() => {
+    sessionTimer = null;
+    window.electronAPI.reportState({ content: raw, fileName: currentFileName, dirty });
+  }, 400);
+}
+
 const docEl = document.getElementById('doc');
 const panelEl = document.getElementById('panel');
 const modeRowEl = document.getElementById('modeRow');
@@ -733,11 +747,13 @@ cancelBtn.addEventListener('click', () => {
 function setDirty(v){
   dirty = v;
   titleText.classList.toggle('dirty', v);
+  pushSession();
 }
 
 function setFileName(name){
   currentFileName = name;
   fileNameEl.textContent = name;
+  pushSession();
 }
 
 async function doSave(saveAs){
@@ -781,6 +797,16 @@ fileInput.addEventListener('change', (e) => {
 });
 
 if(hasElectron){
+  window.electronAPI.onSessionRestore((data) => {
+    if(data){
+      raw = data.content;
+      setFileName(data.fileName || 'Untitled.md');
+      setDirty(!!data.dirty);
+      render();
+    }
+    sessionReady = true;
+    pushSession();
+  });
   window.electronAPI.onFileOpened(({ filePath, content }) => {
     raw = content;
     setFileName(filePath.split(/[\\/]/).pop());

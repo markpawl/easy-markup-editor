@@ -5,5 +5,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveFile: (content, saveAs) => ipcRenderer.invoke('save-file', { content, saveAs }),
   onFileOpened: (callback) => ipcRenderer.on('file-opened', (_event, data) => callback(data)),
   onRequestSave: (callback) => ipcRenderer.on('request-save', () => callback()),
-  onRequestSaveAs: (callback) => ipcRenderer.on('request-save-as', () => callback())
+  onRequestSaveAs: (callback) => ipcRenderer.on('request-save-as', () => callback()),
+  reportState: (state) => ipcRenderer.send('session-state', state),
+  onSessionRestore: (callback) => ipcRenderer.on('session-restore', (_event, data) => callback(data))
 });
