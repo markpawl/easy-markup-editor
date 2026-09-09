@@ -9,6 +9,23 @@
 
 ---
 
+## 2026-09-09 10:13 — Session restore
+
+- On quit the working state (file path, editor buffer, unsaved flag) is
+  persisted; on next launch it replaces the default sample document.
+- Restore rule: dirty → the buffer as-is; clean → re-read the file from disk
+  (falls back to the buffer, marked unsaved, if the file is gone); no file →
+  the buffer. Missing/unreadable session falls back to the sample silently.
+- `recent.json` replaced by a single `state.json` (`{ recentFiles, session }`)
+  under userData, with a one-time import of the legacy file. Session writes are
+  debounced (~400 ms renderer + 600 ms main) plus a synchronous flush on
+  `before-quit`.
+- New IPC: renderer → `session-state`, main → `session-restore`; `preload.js`
+  gained `reportState` / `onSessionRestore`.
+- The unsaved-changes quit prompt still applies; window bounds and unsubmitted
+  edit-panel text are not persisted.
+- Second of the #3 → #2 → #1 sequence. Next: tabs (#1).
+
 ## 2026-09-09 09:49 — File ▸ Open Recent (last 5 markdown files)
 
 - `main.js` gained a recent-files store: `recent.json` under
