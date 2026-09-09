@@ -36,16 +36,19 @@ Stages:
        "Architecture" and "Known limitations (parser gotchas)" sections
        currently in `CLAUDE.md`. (Content now duplicated with `CLAUDE.md` until
        stage 2 trims it.)
-2. [ ] Trim `CLAUDE.md` to: docs table (add `ARCHITECTURE.md` row, tiered read
-       guidance), a session-start protocol section, `Commands`, a condensed
-       3–4 line architecture blurb, `Conventions`, and the doc-maintenance rule
-       (decision D).
-3. [ ] Reconcile `docs/OVERVIEW.md` — keep a short "how it's built" paragraph,
-       point to `ARCHITECTURE.md` for depth, remove anything now duplicated.
-4. [ ] Fix cross-references across `docs/*` (and check `README.md` "How it
-       works" still reads fine standalone — likely leave as is).
-5. [ ] Verify: read `CLAUDE.md` top-to-bottom as a fresh session would —
-       protocol coherent, every doc referenced, no dead links, no fact living
-       in two places.
+2. [x] Trimmed `CLAUDE.md` to: `Session start` protocol, `Project docs` table
+       (added `ARCHITECTURE.md` row), `Keeping docs current` (decision D),
+       `Commands`, `Architecture in brief` (condensed, points to
+       `ARCHITECTURE.md`), `Conventions`.
+3. [x] Reconciled `docs/OVERVIEW.md` — "how it's built" cut to one paragraph;
+       closing cross-reference repointed from `../CLAUDE.md` to
+       `ARCHITECTURE.md`.
+4. [x] Fixed the one stale cross-reference: `REQUIREMENTS.md` "Known gaps"
+       pointed at `CLAUDE.md`, now points at `ARCHITECTURE.md`. `README.md`
+       "How it works" left as is — standalone prose for the public repo page,
+       no internal cross-refs.
+5. [x] Read `CLAUDE.md` top-to-bottom: protocol coherent; all six docs
+       referenced; no dead links. Trimmed the "Fast dev loop" paragraph so the
+       no-Electron-fallback mechanism is described only in `ARCHITECTURE.md`.
 6. [ ] Sign off → `COMPLETED_WORK.md` entry (date + time), delete this work
        set, mark idea `[implemented]` in `IDEAS.md`.

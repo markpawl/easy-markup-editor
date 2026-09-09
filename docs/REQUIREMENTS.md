@@ -55,7 +55,7 @@
 - Opening `renderer/index.html` directly in a browser must work.
 - Open falls back to a file-input picker; Save falls back to a file download.
 
-## Known gaps (see IDEAS.md / CLAUDE.md)
+## Known gaps (see IDEAS.md / ARCHITECTURE.md)
 
 - Sentence splitting is regex-based and mis-splits abbreviations ("e.g.", "Dr.").
 - Code fences containing blank lines are not parsed correctly.

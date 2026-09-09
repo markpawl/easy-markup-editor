@@ -26,17 +26,11 @@ precise, source-level edits, without the context switch of a split-pane editor.
 
 ## How it's built
 
-- **Electron shell** (`main.js`, `preload.js`) — native window, menu, and
-  file-system access, exposed to the page through a narrow `contextBridge` API.
-- **Renderer** (`renderer/index.html`) — the whole app in one inline script:
-  no framework, no bundler, no dependencies. It also runs standalone in a
-  browser (Open falls back to a file picker, Save to a download), which is the
-  fast development loop.
-- **Document model** — the entire markdown document is one string (`raw`).
-  Every render reparses it into blocks, then into offset-tracked "units"
-  (sentence-level for prose, whole-block for headings/code/quotes). Selecting
-  text in the preview maps back to those character offsets so edits hit only
-  the intended span.
+An Electron shell (`main.js`, `preload.js`) wraps a single-file renderer
+(`renderer/index.html`) that is the whole editor — no framework, no bundler,
+and it also runs standalone in a browser. The document is one string; every
+edit re-parses it into offset-tracked "units" so a preview selection maps back
+to the exact source span.
 
-See `../CLAUDE.md` for the architecture in depth, `REQUIREMENTS.md` for intended
+See `ARCHITECTURE.md` for the design in depth, `REQUIREMENTS.md` for intended
 behavior, and `IDEAS.md` for the roadmap.
