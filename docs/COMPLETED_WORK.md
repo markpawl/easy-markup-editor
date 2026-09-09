@@ -9,6 +9,20 @@
 
 ---
 
+## 2026-09-09 09:49 — File ▸ Open Recent (last 5 markdown files)
+
+- `main.js` gained a recent-files store: `recent.json` under
+  `app.getPath('userData')`, newest-first, capped at 5, win32
+  case-insensitive dedupe.
+- `openFile()` split into `openPath(filePath)` + a dialog wrapper; opening a
+  file (dialog, recent entry, or Save As to a new path) records it.
+- New `File ▸ Open Recent` submenu, rebuilt live on every store change;
+  missing files are filtered out; "Clear Recent Files" empties it.
+- No `preload.js` change — recent-open is entirely main-side over the existing
+  `file-opened` IPC.
+- First of the #3 → #2 → #1 sequence. Next: session restore (#2), which will
+  generalize this store.
+
 ## 2026-09-09 09:34 — Restructure CLAUDE.md ↔ docs relationship
 
 - Detailed architecture (render pipeline, selection-to-source mapping,
