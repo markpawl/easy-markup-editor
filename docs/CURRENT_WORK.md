@@ -32,9 +32,10 @@ Decisions (from discussion):
 
 Stages:
 
-1. [ ] Create `docs/ARCHITECTURE.md` with a usage header; move into it the
+1. [x] Create `docs/ARCHITECTURE.md` with a usage header; move into it the
        "Architecture" and "Known limitations (parser gotchas)" sections
-       currently in `CLAUDE.md`.
+       currently in `CLAUDE.md`. (Content now duplicated with `CLAUDE.md` until
+       stage 2 trims it.)
 2. [ ] Trim `CLAUDE.md` to: docs table (add `ARCHITECTURE.md` row, tiered read
        guidance), a session-start protocol section, `Commands`, a condensed
        3–4 line architecture blurb, `Conventions`, and the doc-maintenance rule
