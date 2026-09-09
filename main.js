@@ -32,15 +32,39 @@ function sameFile(a, b) {
     : a === b;
 }
 
+// Normalize a session to { tabs: [{ filePath, fileName, content, dirty }], activeIndex }.
+// Accepts the legacy single-doc shape ({ filePath, fileName, content, dirty }).
+function sanitizeSession(s) {
+  if (!s || typeof s !== 'object') return null;
+  let list;
+  if (Array.isArray(s.tabs)) {
+    list = s.tabs;
+  } else if ('content' in s || 'filePath' in s || 'fileName' in s) {
+    list = [s];
+  } else {
+    return null;
+  }
+  const tabs = list
+    .filter(t => t && typeof t === 'object')
+    .map(t => ({
+      filePath: typeof t.filePath === 'string' && t.filePath ? t.filePath : null,
+      fileName: typeof t.fileName === 'string' && t.fileName ? t.fileName : 'Untitled.md',
+      content: typeof t.content === 'string' ? t.content : '',
+      dirty: !!t.dirty
+    }));
+  if (!tabs.length) return null;
+  let activeIndex = Number.isInteger(s.activeIndex) ? s.activeIndex : 0;
+  if (activeIndex < 0 || activeIndex >= tabs.length) activeIndex = 0;
+  return { tabs, activeIndex };
+}
+
 function sanitizeStore(raw) {
   const out = { recentFiles: [], session: null };
   if (raw && typeof raw === 'object') {
     if (Array.isArray(raw.recentFiles)) {
       out.recentFiles = raw.recentFiles.filter(p => typeof p === 'string').slice(0, RECENT_MAX);
     }
-    if (raw.session && typeof raw.session === 'object') {
-      out.session = raw.session;
-    }
+    out.session = sanitizeSession(raw.session);
   }
   return out;
 }
@@ -101,47 +125,43 @@ function writeStoreSync() {
 // owns — and persists it debounced, plus a synchronous flush on quit.
 
 ipcMain.on('session-state', (event, s) => {
-  if (!s || typeof s !== 'object') return;
-  store.session = {
-    filePath: typeof s.filePath === 'string' && s.filePath ? s.filePath : null,
-    fileName: typeof s.fileName === 'string' ? s.fileName : null,
-    content: typeof s.content === 'string' ? s.content : '',
-    dirty: !!s.dirty
-  };
+  const clean = sanitizeSession(s);
+  if (!clean) return;
+  store.session = clean;
   scheduleStoreWrite();
 });
 
 // Build the restore payload from the persisted session and hand it to the
-// renderer once the page is ready. Rule: a dirty session restores its buffer
+// renderer once the page is ready. Per tab: a dirty tab restores its buffer
 // as-is; a clean one re-reads its file from disk (fresher), falling back to
 // the buffer — marked unsaved — if the file is gone.
 async function sendSessionRestore(win) {
   const s = store.session;
-  if (!s) {
+  if (!s || !s.tabs.length) {
     win.webContents.send('session-restore', null);
     return;
   }
 
-  const filePath = typeof s.filePath === 'string' ? s.filePath : null;
-  let content = typeof s.content === 'string' ? s.content : '';
-  let dirty = !!s.dirty;
-
-  if (filePath && !dirty) {
-    try {
-      content = await fs.readFile(filePath, 'utf-8');
-    } catch {
-      dirty = true;
+  const tabs = [];
+  for (const t of s.tabs) {
+    let content = t.content;
+    let dirty = t.dirty;
+    if (t.filePath && !dirty) {
+      try {
+        content = await fs.readFile(t.filePath, 'utf-8');
+      } catch {
+        dirty = true;
+      }
     }
+    tabs.push({
+      filePath: t.filePath,
+      fileName: t.fileName || (t.filePath ? path.basename(t.filePath) : 'Untitled.md'),
+      content,
+      dirty
+    });
   }
 
-  win.webContents.send('session-restore', {
-    filePath,
-    fileName: typeof s.fileName === 'string' && s.fileName
-      ? s.fileName
-      : (filePath ? path.basename(filePath) : null),
-    content,
-    dirty
-  });
+  win.webContents.send('session-restore', { tabs, activeIndex: s.activeIndex });
 }
 
 // --- Recent files --------------------------------------------------------

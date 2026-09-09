@@ -402,7 +402,16 @@ function pushSession(){
   if(sessionTimer) clearTimeout(sessionTimer);
   sessionTimer = setTimeout(() => {
     sessionTimer = null;
-    window.electronAPI.reportState({ content: raw, fileName: currentFileName, dirty, filePath: tabs[activeIndex].filePath || null });
+    touchActiveTab();
+    window.electronAPI.reportState({
+      tabs: tabs.map(t => ({
+        filePath: t.filePath || null,
+        fileName: t.fileName,
+        content: t.content,
+        dirty: t.dirty
+      })),
+      activeIndex
+    });
   }, 400);
 }
 
@@ -1039,12 +1048,17 @@ fileInput.addEventListener('change', (e) => {
 
 if(hasElectron){
   window.electronAPI.onSessionRestore((data) => {
-    if(data){
-      raw = data.content;
-      tabs[activeIndex].filePath = data.filePath || null;
-      setFileName(data.fileName || 'Untitled.md');
-      setDirty(!!data.dirty);
-      render();
+    if(data && Array.isArray(data.tabs) && data.tabs.length){
+      tabs = data.tabs.map(t => ({
+        filePath: t.filePath || null,
+        fileName: t.fileName || 'Untitled.md',
+        content: typeof t.content === 'string' ? t.content : '',
+        dirty: !!t.dirty
+      }));
+      activeIndex = Number.isInteger(data.activeIndex) && data.activeIndex >= 0 && data.activeIndex < tabs.length
+        ? data.activeIndex
+        : 0;
+      loadActiveIntoGlobals();
     }
     sessionReady = true;
     pushSession();

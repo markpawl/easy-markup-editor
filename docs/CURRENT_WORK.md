@@ -85,11 +85,16 @@ Stages:
        Save As, ─, Close Tab, Quit); on macOS `role:'close'` moved to
        `Cmd+Shift+W` to free `Cmd+W` for Close Tab. Driven test: two
        `request-new-tab` → 3 tabs; `request-close-tab` → 2.
-6. [ ] Session for the set — `store.session` becomes `{ tabs, activeIndex }`
-       (back-compat: an old single-doc `session` loads as one tab). Renderer
-       `reportState` sends the tab array + `activeIndex`; `sendSessionRestore`
-       maps the dirty-vs-disk rule per tab; renderer rebuilds the strip from
-       the restored set.
+6. [x] Session for the set — `store.session` is `{ tabs: [{ filePath, fileName,
+       content, dirty }], activeIndex }`. New `sanitizeSession()` normalizes it
+       and wraps the legacy single-doc shape as one tab. `session-state` runs
+       the renderer payload through it; `sendSessionRestore` applies the
+       dirty-vs-disk rule per tab and sends `{ tabs, activeIndex }`; `pushSession`
+       sends the whole tab array; `onSessionRestore` rebuilds `tabs` +
+       `activeIndex` and `loadActiveIntoGlobals()`. Driven test: 3-tab set
+       persists to `state.json`; relaunch rebuilds it (clean file tab re-read
+       from disk, dirty scratch tab keeps its buffer, active index preserved);
+       a legacy single-doc `session` restores as one tab.
 7. [ ] Docs — `ARCHITECTURE.md` (tab model, per-tab state, `save-file` /
        session IPC changes, close-confirm); `REQUIREMENTS.md` (new "Tabs"
        section; amend Files and Session restore). Full test pass: new / switch /
