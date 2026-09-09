@@ -68,10 +68,16 @@ Stages:
        Driven test: sample tab reused on first open; second file → new tab;
        reopening (lowercased path) focuses the existing tab; opening while the
        active tab is dirty → new tab; a fresh `newTab()` is reused.
-4. [ ] `main.js` + `preload.js` + renderer — `save-file` IPC takes
-       `{ content, filePath, saveAs }`, returns `{ filePath }`; remove
-       `currentFilePath` from main; the active tab stores the returned path.
-       Save As still adds to recent.
+4. [x] `save-file` IPC takes `{ content, filePath, saveAs }`, returns
+       `{ filePath }`. `currentFilePath` removed from `main.js` entirely —
+       `session-state` now reads `s.filePath` from the renderer, `pushSession`
+       sends `tabs[activeIndex].filePath`, `onSessionRestore` stores
+       `data.filePath` back onto the tab, `doSave` passes/records the active
+       tab's path. Save As still `addRecent`s. Driven test: Save with a path
+       writes to disk with no dialog, clears dirty, keeps the path;
+       `state.json` session gets the path from the renderer. Dialog paths (Save
+       with no path, Save As) not headless-testable — same write + addRecent
+       code as before.
 5. [ ] `main.js` — File menu gains **New** (`CmdOrCtrl+N`) and **Close Tab**
        (`CmdOrCtrl+W`), sent to the renderer as `request-new-tab` /
        `request-close-tab` (mirrors `request-save`).

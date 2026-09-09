@@ -402,7 +402,7 @@ function pushSession(){
   if(sessionTimer) clearTimeout(sessionTimer);
   sessionTimer = setTimeout(() => {
     sessionTimer = null;
-    window.electronAPI.reportState({ content: raw, fileName: currentFileName, dirty });
+    window.electronAPI.reportState({ content: raw, fileName: currentFileName, dirty, filePath: tabs[activeIndex].filePath || null });
   }, 400);
 }
 
@@ -1000,8 +1000,10 @@ function setFileName(name){
 
 async function doSave(saveAs){
   if(hasElectron){
-    const result = await window.electronAPI.saveFile(raw, saveAs);
+    const t = tabs[activeIndex];
+    const result = await window.electronAPI.saveFile(raw, t.filePath, saveAs);
     if(result.canceled) return false;
+    t.filePath = result.filePath;
     setFileName(result.filePath.split(/[\\/]/).pop());
     setDirty(false);
     return true;
@@ -1039,6 +1041,7 @@ if(hasElectron){
   window.electronAPI.onSessionRestore((data) => {
     if(data){
       raw = data.content;
+      tabs[activeIndex].filePath = data.filePath || null;
       setFileName(data.fileName || 'Untitled.md');
       setDirty(!!data.dirty);
       render();

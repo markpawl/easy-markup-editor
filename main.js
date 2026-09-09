@@ -4,7 +4,6 @@ const fs = require('fs/promises');
 const { existsSync, writeFileSync } = require('fs');
 
 let mainWindow;
-let currentFilePath = null;
 
 // --- Persistent store ------------------------------------------------------
 // One JSON file under userData holds everything that outlives the renderer:
@@ -104,7 +103,7 @@ function writeStoreSync() {
 ipcMain.on('session-state', (event, s) => {
   if (!s || typeof s !== 'object') return;
   store.session = {
-    filePath: currentFilePath,
+    filePath: typeof s.filePath === 'string' && s.filePath ? s.filePath : null,
     fileName: typeof s.fileName === 'string' ? s.fileName : null,
     content: typeof s.content === 'string' ? s.content : '',
     dirty: !!s.dirty
@@ -134,8 +133,6 @@ async function sendSessionRestore(win) {
       dirty = true;
     }
   }
-
-  if (filePath) currentFilePath = filePath;
 
   win.webContents.send('session-restore', {
     filePath,
@@ -243,7 +240,6 @@ async function openPath(filePath) {
     await pruneRecent(filePath);
     return;
   }
-  currentFilePath = filePath;
   mainWindow.webContents.send('file-opened', { filePath, content });
   await addRecent(filePath);
 }
@@ -264,22 +260,21 @@ ipcMain.handle('open-file-dialog', async () => {
   await openFile();
 });
 
-ipcMain.handle('save-file', async (event, { content, saveAs }) => {
-  let filePath = currentFilePath;
+ipcMain.handle('save-file', async (event, { content, filePath, saveAs }) => {
+  let target = typeof filePath === 'string' && filePath ? filePath : null;
   let viaDialog = false;
-  if (saveAs || !filePath) {
+  if (saveAs || !target) {
     const result = await dialog.showSaveDialog(mainWindow, {
       filters: [{ name: 'Markdown', extensions: ['md'] }],
-      defaultPath: filePath || 'untitled.md'
+      defaultPath: target || 'untitled.md'
     });
     if (result.canceled || !result.filePath) return { canceled: true };
-    filePath = result.filePath;
+    target = result.filePath;
     viaDialog = true;
   }
-  await fs.writeFile(filePath, content, 'utf-8');
-  currentFilePath = filePath;
-  if (viaDialog) await addRecent(filePath);
-  return { canceled: false, filePath };
+  await fs.writeFile(target, content, 'utf-8');
+  if (viaDialog) await addRecent(target);
+  return { canceled: false, filePath: target };
 });
 
 app.whenReady().then(async () => {
