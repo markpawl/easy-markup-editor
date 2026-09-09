@@ -9,27 +9,33 @@
 ## Two runtimes, one renderer
 
 - `main.js` — Electron main process. Owns the `BrowserWindow`, the native menu
-  (with `CmdOrCtrl+O/S/Shift+S` accelerators), `fs/promises` access, and native
+  (`CmdOrCtrl+N/O/S/Shift+S/W` accelerators), `fs/promises` access, and native
   Open/Save dialogs. Menu items send IPC messages (`request-save`,
-  `request-save-as`) to the renderer rather than acting directly.
+  `request-save-as`, `request-new-tab`, `request-close-tab`) to the renderer
+  rather than acting directly. Main keeps no per-document state — the renderer
+  owns the open tabs, including each tab's file path.
 - `preload.js` — exposes a narrow `window.electronAPI` over `contextBridge`
-  (`openFile`, `saveFile`, `onFileOpened`, `onRequestSave`, `onRequestSaveAs`).
+  (`openFile`, `saveFile`, `onFileOpened`, `onRequestSave`, `onRequestSaveAs`,
+  `onRequestNewTab`, `onRequestCloseTab`, `reportState`, `onSessionRestore`).
   `contextIsolation` on, `nodeIntegration` off, `sandbox` on — the renderer
   cannot reach Node or the filesystem directly.
-- `renderer/index.html` — the entire application. One ~500-line inline
-  `<script>`, no framework, no bundler. `const hasElectron = !!window.electronAPI`
-  branches every file-I/O path between the Electron API and the browser
-  fallback (file-input picker for Open, Blob download for Save).
+- `renderer/index.html` — the entire application. One inline `<script>`, no
+  framework, no bundler. `const hasElectron = !!window.electronAPI` branches
+  every file-I/O path between the Electron API and the browser fallback
+  (file-input picker for Open, Blob download for Save).
 
 ## Main-process state
 
-`main.js` holds the state that outlives the renderer. `currentFilePath` (the
-file `Save` writes back to) is in memory only. Everything persisted lives in a
-single `state.json` under `app.getPath('userData')`, loaded into the `store`
-object at startup (`loadStore` / `writeStore` / `sanitizeStore`):
+`main.js` holds no per-document state — the renderer owns the tabs. Everything
+persisted lives in a single `state.json` under `app.getPath('userData')`,
+loaded into the `store` object at startup (`loadStore` / `writeStore` /
+`sanitizeStore`):
 
 ```
-store = { recentFiles: string[], session: {…} | null }
+store = {
+  recentFiles: string[],
+  session: { tabs: [{ filePath, fileName, content, dirty }], activeIndex } | null
+}
 ```
 
 `loadStore` does a one-time import of a legacy `recent.json` when `state.json`
@@ -47,23 +53,58 @@ startup. Opening a recent entry is entirely main-side — the click calls
 `openPath()`, which sends the same `file-opened` IPC the Open dialog uses (no
 `preload.js` surface).
 
-**Session** (`store.session` = `{ filePath, fileName, content, dirty }`) — the
-renderer pushes `{ content, fileName, dirty }` over the `session-state` channel
-(debounced ~400 ms on its side via `pushSession()`, gated on `sessionReady`);
-`ipcMain.on('session-state')` attaches the main-owned `filePath` and
-`scheduleStoreWrite()`s. On `did-finish-load`, `sendSessionRestore()` applies
-the restore rule — dirty → the stored buffer as-is; clean → re-read `filePath`
-from disk, falling back to the buffer (marked dirty) if that fails; nothing to
-restore → send `null` — and emits `session-restore`. The renderer applies it
-over `SAMPLE` and only then sets `sessionReady = true`, so the initial default
-document can't clobber a stored session. `preload.js` adds `reportState` and
-`onSessionRestore` for this.
+**Session** — the renderer pushes the whole tab set (`{ tabs, activeIndex }`,
+each tab `{ filePath, fileName, content, dirty }`) over the `session-state`
+channel, debounced ~400 ms via `pushSession()` and gated on `sessionReady`.
+`ipcMain.on('session-state')` runs it through `sanitizeSession()` and
+`scheduleStoreWrite()`s. `sanitizeSession()` also accepts the pre-tabs shape
+(`{ filePath, fileName, content, dirty }`) and wraps it as a one-tab session.
+On `did-finish-load`, `sendSessionRestore()` applies the restore rule **per
+tab** — dirty → the stored buffer as-is; clean → re-read `filePath` from disk,
+falling back to the buffer (marked dirty) if that fails — then emits
+`session-restore` with `{ tabs, activeIndex }` (or `null` when there is nothing
+to restore). The renderer rebuilds its tab set from that and only then sets
+`sessionReady = true`, so the initial default document can't clobber a stored
+session. `preload.js` adds `reportState` and `onSessionRestore` for this.
+
+## Tabs and the active-document mirror
+
+The renderer holds `tabs` — an array of `{ filePath, fileName, content, dirty }`
+— and `activeIndex`. `tabs` is the source of truth for open documents.
+
+The editor/render/panel code still works on the plain globals `raw`,
+`currentFileName`, `dirty`, which are a **live mirror of `tabs[activeIndex]`**:
+
+- `touchActiveTab()` writes the globals back into the active tab. It runs inside
+  `setDirty()` / `setFileName()` (so every edit and rename lands on the tab) and
+  again inside `pushSession()`.
+- `loadActiveIntoGlobals()` reads the active tab into the globals, updates the
+  title bar, and calls `render()` — whose `clearSelectionState()` returns the
+  edit panel to idle. It runs on every tab switch, new tab, open, and restore.
+
+`renderTabs()` redraws the strip from `tabs` on each state change; one delegated
+click listener on the strip handles select / close / new.
+
+`openIntoTab({ filePath, fileName, content })` decides the target tab: focus an
+open tab with the same path (`sameFilePath`, case-insensitive on win32), else
+reuse a *pristine* tab (no path, clean, content `''` or `SAMPLE`), else push a
+new one. Both `onFileOpened` and the browser file input route through it.
+
+`closeTab(i)` — if the tab is dirty, `confirmClose()` shows the dedicated
+`#closeOverlay` modal (Save / Don't save / Cancel; Save runs `doSave` and
+aborts the close if it is canceled). `removeTabAt()` keeps **at least one tab**
+— closing the last one leaves a fresh `Untitled`. `beforeunload` blocks the
+window close if **any** tab is dirty.
+
+`save-file` IPC is `{ content, filePath, saveAs } → { canceled } | { filePath }`;
+`doSave()` passes the active tab's `filePath` and records the returned one.
 
 ## Core model: `raw` + offset-tracked units
 
-`raw` (a single string in `index.html`) is the whole document and the sole
-source of truth. The default content is the `SAMPLE` constant near the top of
-the script — there is no example file on disk.
+`raw` is the active tab's working copy of its document text (see the mirror
+above). Within a tab it is the source of truth for the text; every edit splices
+`raw` and re-renders. The first-run default is the `SAMPLE` constant near the
+top of the script — there is no example file on disk.
 
 Every render runs this pipeline:
 
@@ -128,3 +169,5 @@ still points at the right span after the string length changed.
   in the last moment before a crash — as opposed to a clean quit, which flushes
   synchronously — may not be persisted. Text typed into the edit panel but not
   yet submitted is never part of the session.
+- Switching tabs resets the edit panel to idle; there is no per-tab
+  panel/selection or scroll-position memory.

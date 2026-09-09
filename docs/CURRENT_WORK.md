@@ -95,11 +95,19 @@ Stages:
        persists to `state.json`; relaunch rebuilds it (clean file tab re-read
        from disk, dirty scratch tab keeps its buffer, active index preserved);
        a legacy single-doc `session` restores as one tab.
-7. [ ] Docs — `ARCHITECTURE.md` (tab model, per-tab state, `save-file` /
-       session IPC changes, close-confirm); `REQUIREMENTS.md` (new "Tabs"
-       section; amend Files and Session restore). Full test pass: new / switch /
-       close, dirty-close confirm, open-existing-focuses, pristine-Untitled
-       reuse, save + Save As per tab, quit → relaunch restores the set and
-       active tab, last-tab-close, browser mode.
+7. [x] Docs — `ARCHITECTURE.md`: "Two runtimes" (IPC list, renderer owns
+       tabs), "Main-process state" (`store.session` shape), "Session"
+       (`sanitizeSession`, per-tab rule), new "Tabs and the active-document
+       mirror" section, "Core model" reworded (`raw` = active tab's copy), two
+       new limitation notes. `REQUIREMENTS.md`: new "Tabs" section; "Files" and
+       "Session restore" amended for tabs; window-close prompt now "any tab".
+       Full driven test pass: build 3 tabs → real `app.quit()` → relaunch
+       restores all 3 with correct active/dirty (clean file tab re-read from
+       disk, dirty buffer kept); close clean tab (index clamps); close dirty
+       tab → confirm modal → Don't save removes it; close last tab → fresh
+       `Untitled`. Earlier stages covered open-focus / pristine reuse / per-tab
+       save. Browser (non-Electron) mode verified live in Chrome: `hasElectron`
+       false, strip renders, `newTab` / `switchTab` / edit + dirty dot work, no
+       console errors.
 8. [ ] Sign off → `COMPLETED_WORK.md` entry (date + time), delete this work
        set, move idea to `IDEAS.md` Completed as `[implemented]`.
