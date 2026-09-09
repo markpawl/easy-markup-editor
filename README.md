@@ -1,7 +1,10 @@
-# Patch
+# Markup View-Edit
 
-A markdown editor where the preview is the primary surface. There's no raw-source
-pane. Instead:
+A markdown editor where the preview is the primary surface. 
+Inserts and Updates are added through a right-panel edit box.
+It lets you read rendered markdown while not losing the ability to edit.
+
+How It Works:
 
 - **Select a sentence, list item, or heading** in the preview and a scoped panel on
   the right loads just that text. Edit it and hit Submit to write it back into the
@@ -15,7 +18,7 @@ pane. Instead:
 You'll need [Node.js](https://nodejs.org) installed (18+ is fine).
 
 ```bash
-cd patch-editor-electron
+cd easy-markup-editor
 npm install
 npm start
 ```

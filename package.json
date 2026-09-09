@@ -1,7 +1,8 @@
 {
-  "name": "patch-editor",
+  "name": "markup-view-edit",
+  "productName": "Markup View-Edit",
   "version": "0.1.0",
-  "description": "A preview-first markdown editor: edit through a selection-scoped patch panel instead of a raw source pane.",
+  "description": "A preview-first markdown editor: edit through a selection-scoped edit panel instead of a raw source pane.",
   "private": true,
   "main": "main.js",
   "scripts": {
