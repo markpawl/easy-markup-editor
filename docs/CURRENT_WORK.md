@@ -43,10 +43,14 @@ Decisions:
 
 Stages:
 
-1. [ ] Renderer — introduce `tabs` + `activeIndex`, seeded from the current
-       single doc; `loadActiveIntoGlobals()` / `touchActiveTab()` indirection;
-       tab-strip DOM + CSS rendering one tab. No new/switch/close yet — prove
-       editing, Save, and session still work through the indirection.
+1. [x] Renderer — `tabs` (`{ filePath, fileName, content, dirty }`) +
+       `activeIndex`, seeded from the single doc; `activeTab()` /
+       `touchActiveTab()` indirection wired into `setDirty` / `setFileName`;
+       `.tab-strip` DOM + CSS; `renderTabs()` draws the tabs + a (still inert)
+       `+` / `×`. Verified: one tab, strip shows it, a simulated edit mirrors
+       into `tabs[activeIndex].content` / `.dirty` and the strip's dirty dot;
+       no page errors. `loadActiveIntoGlobals()` deferred to stage 2 (needed
+       only when switching).
 2. [ ] Renderer — `newTab()`, `switchTab(i)` (click), `closeTab(i)` with the
        dirty-close confirm; never fewer than one tab; panel resets to idle on
        switch. A `+` button drives `newTab` for now.

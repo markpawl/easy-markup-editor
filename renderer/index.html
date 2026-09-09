@@ -80,6 +80,64 @@
     cursor:pointer;
   }
   .file-actions button:hover{border-color:var(--ink-soft);}
+  .tab-strip{
+    display:flex;
+    align-items:flex-end;
+    gap:2px;
+    padding:0 12px;
+    background:var(--paper);
+    border-bottom:1px solid var(--hairline);
+    flex-shrink:0;
+    overflow-x:auto;
+    -webkit-app-region: no-drag;
+  }
+  .tab{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-family:var(--mono);
+    font-size:12px;
+    padding:7px 8px 6px 11px;
+    border:1px solid transparent;
+    border-bottom:none;
+    border-radius:5px 5px 0 0;
+    background:transparent;
+    color:var(--ink-soft);
+    cursor:pointer;
+    white-space:nowrap;
+    max-width:220px;
+  }
+  .tab:hover{color:var(--ink);}
+  .tab.active{
+    background:var(--card);
+    border-color:var(--hairline);
+    color:var(--ink);
+  }
+  .tab .tab-name{overflow:hidden; text-overflow:ellipsis;}
+  .tab .tab-dot{
+    width:6px; height:6px; border-radius:50%;
+    background:var(--insert);
+    flex-shrink:0;
+    visibility:hidden;
+  }
+  .tab.dirty .tab-dot{visibility:visible;}
+  .tab .tab-close{
+    border:none; background:none; color:inherit;
+    font-family:var(--mono); font-size:14px; line-height:1;
+    padding:1px 3px; margin-left:1px;
+    cursor:pointer; border-radius:3px;
+    visibility:hidden;
+  }
+  .tab:hover .tab-close,.tab.active .tab-close{visibility:visible;}
+  .tab .tab-close:hover{background:rgba(0,0,0,0.09);}
+  .tab-new{
+    border:none; background:none;
+    font-family:var(--mono); font-size:16px;
+    color:var(--ink-soft); cursor:pointer;
+    padding:3px 9px 5px;
+    align-self:center;
+  }
+  .tab-new:hover{color:var(--ink);}
   main{
     flex:1;
     display:flex;
@@ -256,6 +314,8 @@
   </div>
 </header>
 
+<div class="tab-strip" id="tabStrip"></div>
+
 <main>
   <div class="preview-pane"><div class="doc" id="doc"></div></div>
   <div class="panel" id="panel">
@@ -287,15 +347,31 @@
 <script>
 const SAMPLE = "# Trail notes\n\nWe started at the lower ridge trailhead around 7am, before the heat set in. The first mile climbs steadily through pine, then flattens out along a shoulder with views back toward the valley.\n\n## Gear\n\n- Two liters of water minimum. A third if it's forecast over 85.\n- Trekking poles for the descent\n- A light jacket for the summit wind\n\nAt the saddle the trail splits. The left fork is shorter but exposed the whole way. The right fork adds forty minutes but stays in tree cover until the final scramble.\n\n> Take the right fork if it's already past 9am. The exposed section gets brutal in direct sun.\n\n## Summit\n\nThe last quarter mile is a hands-on-rock scramble, not technical but slow going. Worth it for the ridge line view in both directions. Plan on six hours round trip for a relaxed pace.";
 
-let raw = SAMPLE;
+// Open documents. Each tab: { filePath, fileName, content, dirty }.
+// `raw` / `currentFileName` / `dirty` below are a live mirror of tabs[activeIndex];
+// touchActiveTab() writes the mirror back, loadActiveIntoGlobals() reads it in.
+let tabs = [{ filePath: null, fileName: 'Untitled.md', content: SAMPLE, dirty: false }];
+let activeIndex = 0;
+
+let raw = tabs[0].content;
 let blocks = [];
 let flatUnits = [];
 let mode = 'idle';
 let range = null;
 let loadedEditText = '';
-let currentFileName = 'Untitled.md';
-let dirty = false;
+let currentFileName = tabs[0].fileName;
+let dirty = tabs[0].dirty;
 let pendingTarget = null;
+
+function activeTab(){ return tabs[activeIndex]; }
+
+function touchActiveTab(){
+  const t = tabs[activeIndex];
+  if(!t) return;
+  t.content = raw;
+  t.fileName = currentFileName;
+  t.dirty = dirty;
+}
 
 const hasElectron = !!window.electronAPI;
 
@@ -326,6 +402,7 @@ const saveBtn = document.getElementById('saveBtn');
 const fileInput = document.getElementById('fileInput');
 const titleText = document.getElementById('titleText');
 const fileNameEl = document.getElementById('fileName');
+const tabStripEl = document.getElementById('tabStrip');
 const modalOverlay = document.getElementById('modalOverlay');
 const modalTitle = document.getElementById('modalTitle');
 const modalBody = document.getElementById('modalBody');
@@ -493,6 +570,17 @@ function render(){
   blocks.forEach(b => { b.units = computeUnitsForBlock(b); });
   docEl.innerHTML = blocks.map((b, i) => `<div class="block" data-idx="${i}">${renderBlockHtml(b, i)}</div>`).join('');
   clearSelectionState();
+}
+
+function renderTabs(){
+  const tabsHtml = tabs.map((t, i) =>
+    `<div class="tab${i === activeIndex ? ' active' : ''}${t.dirty ? ' dirty' : ''}" data-tab="${i}">` +
+      `<span class="tab-name">${escapeHtml(t.fileName || 'Untitled.md')}</span>` +
+      `<span class="tab-dot"></span>` +
+      `<button class="tab-close" data-close="${i}" title="Close tab" tabindex="-1">&times;</button>` +
+    `</div>`
+  ).join('');
+  tabStripEl.innerHTML = tabsHtml + `<button class="tab-new" id="tabNew" title="New tab" tabindex="-1">+</button>`;
 }
 
 function findUnitEl(node){
@@ -747,12 +835,16 @@ cancelBtn.addEventListener('click', () => {
 function setDirty(v){
   dirty = v;
   titleText.classList.toggle('dirty', v);
+  touchActiveTab();
+  renderTabs();
   pushSession();
 }
 
 function setFileName(name){
   currentFileName = name;
   fileNameEl.textContent = name;
+  touchActiveTab();
+  renderTabs();
   pushSession();
 }
 
