@@ -12,13 +12,18 @@
 
 ## Pending
 
-- [future] Tab interface for multiple `.md` files open at once
 - [future] Fix sentence splitter for abbreviations ("e.g.", "Dr.")
 - [future] Parse code fences that contain blank lines
 - [future] Split blockquotes into sentence-level units
+- [future] Per-tab memory of panel selection and scroll position across switches
+- [future] Drag to reorder tabs
+- [future] Ctrl+Tab MRU cycling between tabs
+- [future] Per-tab undo/redo
+- [future] Restore window size and position on launch
 
 ## Completed
 
+- [implemented] Tab interface for multiple `.md` files open at once
 - [implemented] On exit, save the set of open files and reopen them on startup
 - [implemented] File ▸ Open Recent menu listing the last 5 markdown files opened
 - [implemented] Restructure CLAUDE.md ↔ docs relationship (detail → `docs/ARCHITECTURE.md`, session-start protocol, doc-upkeep rule)

@@ -9,6 +9,24 @@
 
 ---
 
+## 2026-09-09 12:26 — Tab interface (multiple files open at once)
+
+- The single global document became a set of tabs. The renderer owns `tabs`
+  (`{ filePath, fileName, content, dirty }`) + `activeIndex`; `raw` /
+  `currentFileName` / `dirty` are a live mirror of the active tab
+  (`touchActiveTab` / `loadActiveIntoGlobals`).
+- Tab strip with select / close (`×`) / new (`+`). File menu gained **New**
+  (`Ctrl/Cmd+N`) and **Close Tab** (`Ctrl/Cmd+W`).
+- Open targets a tab: focus an already-open tab for that path, else reuse a
+  pristine `Untitled`, else new tab.
+- Closing a dirty tab prompts Save / Don't save / Cancel; always ≥1 tab
+  (last close → fresh `Untitled`); window close prompts if any tab is dirty.
+- `main.js` no longer tracks a current path — `save-file` IPC carries
+  `{ content, filePath, saveAs }`. `store.session` is now
+  `{ tabs, activeIndex }` (legacy single-doc shape still loads, as one tab);
+  session persist/restore applies the dirty-vs-disk rule per tab.
+- Last of the #3 → #2 → #1 sequence.
+
 ## 2026-09-09 10:13 — Session restore
 
 - On quit the working state (file path, editor buffer, unsaved flag) is
