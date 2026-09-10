@@ -1,4 +1,4 @@
-# Markup View-Edit
+# Markdown View-Edit
 
 A markdown editor where the preview is the primary surface. 
 Inserts and Updates are added through a right-panel edit box.
